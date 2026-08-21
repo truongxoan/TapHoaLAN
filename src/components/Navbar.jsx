@@ -39,35 +39,30 @@ export const Navbar = () => {
     setMobileConnectOpen,
     connectedDevicesList,
     setDevicesModalOpen,
+    setManagementMenuOpen,
   } = useStore();
 
   const cartTotalItems = cart.reduce((sum, item) => sum + item.qty, 0);
   const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
   const activeDebtsCount = debts.filter((d) => d.remainingDebt > 0).length;
 
-  const handleTabClick = (tabId) => {
-    if (tabId !== 'pos' && tabId !== 'mobile_pos') {
-      requireManagerPin(() => setActiveTab(tabId));
-    } else {
-      setActiveTab(tabId);
-    }
-  };
-
-  // When locked: Only allow POS selling tabs
-  const allNavItems = [
+  // Primary visible tabs (Bán hàng POS & Bán hàng Điện thoại)
+  const primaryTabs = [
     { id: 'pos', label: 'Bán Hàng (POS)', icon: ShoppingCart, badge: cartTotalItems },
     { id: 'mobile_pos', label: '📱 Bán Điện Thoại', icon: Smartphone },
-    { id: 'import', label: 'Nhập Hàng', icon: PackagePlus, requiresOwner: true },
-    { id: 'inventory', label: 'Kho & Sửa Giá', icon: Boxes, alert: lowStockCount, requiresOwner: true },
-    { id: 'debts', label: 'Sổ Nợ Khách', icon: BookOpen, debtBadge: activeDebtsCount, requiresOwner: true },
-    { id: 'invoices', label: 'Hóa Đơn & Thuế', icon: Receipt, requiresOwner: true },
-    { id: 'reports', label: 'Báo Cáo Lời Lỗ', icon: BarChart3, requiresOwner: true },
-    { id: 'settings', label: 'Cài Đặt & Server', icon: Settings, requiresOwner: true },
   ];
 
-  const visibleNavItems = isPinUnlocked
-    ? allNavItems
-    : allNavItems.filter((item) => !item.requiresOwner);
+  // Screen labels mapping for active management screens
+  const screenTitles = {
+    inventory: '📦 Kho Hàng & Sửa Giá',
+    import: '📥 Nhập Hàng',
+    debts: `📖 Sổ Nợ (${activeDebtsCount})`,
+    invoices: '🧾 Hóa Đơn & Thuế',
+    reports: '📊 Báo Cáo Lời Lỗ',
+    settings: '⚙️ Cài Đặt Hệ Thống',
+  };
+
+  const isManagementScreen = activeTab !== 'pos' && activeTab !== 'mobile_pos';
 
   return (
     <header className="header-nav no-print">
@@ -83,27 +78,25 @@ export const Navbar = () => {
               <span className="brand-badge">PRO v3.2</span>
             </div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-              Bán hàng & Tự động Backup
+              Bán hàng & Mạng LAN Cục Bộ
             </div>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Primary Navigation Tabs */}
         <nav className="nav-tabs">
-          {visibleNavItems.map((item) => {
+          {primaryTabs.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
               <button
                 key={item.id}
+                type="button"
                 className={`nav-tab-btn ${isActive ? 'active' : ''}`}
-                onClick={() => handleTabClick(item.id)}
+                onClick={() => setActiveTab(item.id)}
               >
                 <Icon size={16} />
                 <span>{item.label}</span>
-                {item.requiresPin && !isPinUnlocked && (
-                  <Lock size={11} color="var(--warning)" style={{ marginLeft: '1px' }} />
-                )}
                 {item.badge > 0 && (
                   <span
                     style={{
@@ -119,45 +112,50 @@ export const Navbar = () => {
                     {item.badge}
                   </span>
                 )}
-                {item.alert > 0 && (
-                  <span
-                    style={{
-                      background: 'var(--danger)',
-                      color: '#fff',
-                      fontSize: '0.65rem',
-                      fontWeight: 700,
-                      padding: '1px 5px',
-                      borderRadius: '9999px',
-                      marginLeft: '2px',
-                    }}
-                    title={`${item.alert} sản phẩm sắp hết hàng`}
-                  >
-                    {item.alert}
-                  </span>
-                )}
-                {item.debtBadge > 0 && (
-                  <span
-                    style={{
-                      background: 'var(--warning)',
-                      color: '#000',
-                      fontSize: '0.65rem',
-                      fontWeight: 800,
-                      padding: '1px 5px',
-                      borderRadius: '9999px',
-                      marginLeft: '2px',
-                    }}
-                    title={`${item.debtBadge} khách đang nợ`}
-                  >
-                    {item.debtBadge}
-                  </span>
-                )}
               </button>
             );
           })}
+
+          {/* Active Management Screen Pill */}
+          {isManagementScreen && (
+            <button
+              type="button"
+              className="nav-tab-btn active"
+              style={{ background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 800, borderColor: 'var(--primary-border)' }}
+              onClick={() => setManagementMenuOpen(true)}
+              title="Nhấn để đổi phân hệ quản lý"
+            >
+              <span>{screenTitles[activeTab] || 'Phân Hệ Quản Lý'}</span>
+              <span style={{ fontSize: '0.75rem', opacity: 0.7, marginLeft: '4px' }}>▼</span>
+            </button>
+          )}
         </nav>
 
         {/* Header Right Actions */}
         <div className="header-actions">
+          {/* Central Management Menu Gear Button (Nút Bánh Răng Quản Lý) */}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setManagementMenuOpen(true)}
+            title="Mở toàn bộ menu quản lý (Kho hàng, Nhập hàng, Sổ nợ, Báo cáo, Cài đặt)"
+            style={{ fontWeight: 800 }}
+          >
+            <Settings size={15} />
+            <span>Quản Lý</span>
+            {(activeDebtsCount > 0 || lowStockCount > 0) && (
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: '#F59E0B',
+                  boxShadow: '0 0 6px #F59E0B',
+                  display: 'inline-block',
+                }}
+              />
+            )}
+          </button>
           {/* Shift Closing Button (Chốt ca 4h-22h) */}
           <button
             className="btn btn-secondary btn-sm"

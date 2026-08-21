@@ -98,6 +98,7 @@ export const StoreProvider = ({ children }) => {
   const [lanIp, setLanIp] = useState(window.location.hostname || 'localhost');
   const [connectedDevicesList, setConnectedDevicesList] = useState([]);
   const [devicesModalOpen, setDevicesModalOpen] = useState(false);
+  const [managementMenuOpen, setManagementMenuOpen] = useState(false);
   const wsRef = useRef(null);
 
   // MANAGER PIN STATE (Mã PIN bảo mật chủ tiệm: Mặc định 1233)
@@ -171,10 +172,37 @@ export const StoreProvider = ({ children }) => {
     return localStorage.getItem('smartpos_last_backup_time') || new Date().toISOString();
   });
 
-  // Cart State (for POS Screen)
-  const [cart, setCart] = useState([]);
+  // Cart State (for POS Screen & Mobile - Auto persisted to prevent data loss on camera reload)
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smartpos_active_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('smartpos_active_cart', JSON.stringify(cart));
+    } catch (e) {}
+  }, [cart]);
+
   const [cartDiscount, setCartDiscount] = useState({ type: 'amount', value: 0 });
-  const [customer, setCustomer] = useState({ name: 'Khách lẻ', phone: '', taxId: '' });
+  const [customer, setCustomer] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smartpos_active_customer');
+      return saved ? JSON.parse(saved) : { name: 'Khách lẻ', phone: '', taxId: '' };
+    } catch (e) {
+      return { name: 'Khách lẻ', phone: '', taxId: '' };
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('smartpos_active_customer', JSON.stringify(customer));
+    } catch (e) {}
+  }, [customer]);
 
   // Scanner modal state
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -1000,6 +1028,8 @@ export const StoreProvider = ({ children }) => {
         connectedDevicesList,
         devicesModalOpen,
         setDevicesModalOpen,
+        managementMenuOpen,
+        setManagementMenuOpen,
         managerPin,
         isPinUnlocked,
         requireManagerPin,

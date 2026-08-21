@@ -56,8 +56,34 @@ export const MobilePOSScreen = () => {
   const [customerName, setCustomerName] = useState('');
   const [cashierName, setCashierName] = useState(() => localStorage.getItem('smartpos_cashier_name') || 'Điện Thoại 1');
   const [cameraCollapsed, setCameraCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState('cart'); // 'cart' | 'catalog'
 
   const html5QrCodeRef = useRef(null);
+  const productsRef = useRef(products);
+  productsRef.current = products;
+
+  // Swipe gesture detection
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+
+  const handleTouchStart = (e) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    const diffX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const diffY = e.changedTouches[0].clientY - touchStartYRef.current;
+
+    // Horizontal swipe (Vuốt ngang trái/phải để chuyển Giỏ Hàng <-> Hàng Hóa)
+    if (Math.abs(diffX) > 60 && Math.abs(diffY) < 50) {
+      if (diffX < 0) {
+        setMobileTab('catalog'); // Vuốt sang trái -> Xem danh mục hàng
+      } else {
+        setMobileTab('cart'); // Vuốt sang phải -> Về giỏ hàng
+      }
+    }
+  };
 
   const formatVND = (val) =>
     new Intl.NumberFormat('vi-VN').format(Math.round(val || 0)) + ' đ';
@@ -68,7 +94,7 @@ export const MobilePOSScreen = () => {
     const startCamera = async () => {
       try {
         if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-          await html5QrCodeRef.current.stop();
+          await html5QrCodeRef.current.stop().catch(() => {});
         }
 
         const qrCode = new Html5Qrcode('mobile-camera-viewport');
@@ -86,7 +112,7 @@ export const MobilePOSScreen = () => {
           (decodedText) => {
             if (isMounted) {
               playBeep();
-              const found = products.find((p) => p.barcode === decodedText);
+              const found = productsRef.current.find((p) => p.barcode === decodedText);
               if (found) {
                 addToCart(found, 1);
                 showToast(`+1 ${found.name}`, 'success');
@@ -100,7 +126,7 @@ export const MobilePOSScreen = () => {
 
         if (isMounted) setIsCameraActive(true);
       } catch (err) {
-        console.warn('Mobile camera start error:', err);
+        console.warn('Mobile camera start error (safely caught):', err);
         if (isMounted) setIsCameraActive(false);
       }
     };
@@ -108,7 +134,7 @@ export const MobilePOSScreen = () => {
     if (!cameraCollapsed) {
       const timer = setTimeout(() => {
         startCamera();
-      }, 300);
+      }, 350);
       return () => {
         isMounted = false;
         clearTimeout(timer);
@@ -121,7 +147,7 @@ export const MobilePOSScreen = () => {
         html5QrCodeRef.current.stop().catch(() => {});
       }
     }
-  }, [facingMode, cameraCollapsed, products]);
+  }, [facingMode, cameraCollapsed]);
 
   const toggleFacingMode = () => {
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
@@ -159,7 +185,11 @@ export const MobilePOSScreen = () => {
   const cashChange = Math.max(0, (Number(cashReceived) || 0) - cartGrandTotal);
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', paddingBottom: '5rem' }}>
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      style={{ maxWidth: '600px', margin: '0 auto', paddingBottom: '5.5rem', userSelect: 'none' }}
+    >
       {/* Top Mobile Bar */}
       <div
         style={{
@@ -169,7 +199,7 @@ export const MobilePOSScreen = () => {
           background: 'var(--bg-card)',
           padding: '0.6rem 0.85rem',
           borderRadius: 'var(--radius-md)',
-          marginBottom: '0.75rem',
+          marginBottom: '0.5rem',
           border: '1px solid var(--border-color)',
         }}
       >
@@ -192,6 +222,7 @@ export const MobilePOSScreen = () => {
           {isPinUnlocked ? (
             <>
               <button
+                type="button"
                 className="btn btn-primary btn-sm"
                 onClick={() => setMobileAddProductOpen(true)}
                 style={{ padding: '3px 7px', fontSize: '0.725rem', fontWeight: 700 }}
@@ -202,6 +233,7 @@ export const MobilePOSScreen = () => {
               </button>
 
               <button
+                type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={lockManagerPin}
                 style={{ padding: '3px 6px', fontSize: '0.725rem', color: 'var(--success)', fontWeight: 700 }}
@@ -213,6 +245,7 @@ export const MobilePOSScreen = () => {
             </>
           ) : (
             <button
+              type="button"
               className="btn btn-secondary btn-sm"
               onClick={() => setPinModalOpen(true)}
               style={{ padding: '3px 7px', fontSize: '0.725rem', fontWeight: 700 }}
@@ -224,6 +257,7 @@ export const MobilePOSScreen = () => {
           )}
 
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setCameraCollapsed(!cameraCollapsed)}
             style={{ padding: '3px 6px', fontSize: '0.725rem' }}
@@ -234,6 +268,55 @@ export const MobilePOSScreen = () => {
         </div>
       </div>
 
+      {/* SWIPE NAVIGATION TAB BAR */}
+      <div
+        style={{
+          display: 'flex',
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-md)',
+          padding: '3px',
+          marginBottom: '0.5rem',
+          border: '1px solid var(--border-color)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setMobileTab('cart')}
+          style={{
+            flex: 1,
+            padding: '6px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: mobileTab === 'cart' ? 'var(--primary)' : 'transparent',
+            color: mobileTab === 'cart' ? '#fff' : 'var(--text-secondary)',
+            fontWeight: 800,
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          🛒 Giỏ Hàng ({cart.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('catalog')}
+          style={{
+            flex: 1,
+            padding: '6px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: mobileTab === 'catalog' ? 'var(--primary)' : 'transparent',
+            color: mobileTab === 'catalog' ? '#fff' : 'var(--text-secondary)',
+            fontWeight: 800,
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          📦 Hàng Hóa ({products.length})
+        </button>
+      </div>
+
       {/* MOBILE LIVE CAMERA VIEWPORT */}
       {!cameraCollapsed && (
         <div
@@ -242,9 +325,9 @@ export const MobilePOSScreen = () => {
             borderRadius: 'var(--radius-lg)',
             overflow: 'hidden',
             background: '#0B0F19',
-            minHeight: '180px',
-            maxHeight: '220px',
-            marginBottom: '0.75rem',
+            minHeight: '170px',
+            maxHeight: '210px',
+            marginBottom: '0.65rem',
             border: '2px solid var(--primary-border)',
             display: 'flex',
             alignItems: 'center',
@@ -254,6 +337,7 @@ export const MobilePOSScreen = () => {
           <div id="mobile-camera-viewport" style={{ width: '100%', height: '100%' }} />
 
           <button
+            type="button"
             onClick={toggleFacingMode}
             style={{
               position: 'absolute',
@@ -290,104 +374,160 @@ export const MobilePOSScreen = () => {
               pointerEvents: 'none',
             }}
           >
-            Hướng camera vào mã vạch trên bao bì
+            👈👉 Vuốt ngang để đổi Tab • Đưa camera vào mã vạch
           </div>
         </div>
       )}
 
-      {/* CURRENT CART ITEMS ON MOBILE */}
-      <div className="card" style={{ marginBottom: '0.75rem' }}>
-        <div className="card-header" style={{ padding: '0.5rem 0.85rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>
-              Đơn Hàng ({cart.length} món)
-            </span>
-            <button
-              className="btn btn-secondary btn-sm"
-              style={{ padding: '2px 6px', fontSize: '0.7rem', color: 'var(--warning)', fontWeight: 700 }}
-              onClick={() => setLoyaltyModalOpen(true)}
-              title="Tích điểm khách quen"
-            >
-              <Gift size={12} />
-              <span>Điểm</span>
-            </button>
+      {/* TAB CONTENT: CART VIEW OR CATALOG VIEW */}
+      {mobileTab === 'cart' ? (
+        /* CURRENT CART ITEMS ON MOBILE */
+        <div className="card" style={{ marginBottom: '0.75rem' }}>
+          <div className="card-header" style={{ padding: '0.5rem 0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>
+                Đơn Hàng ({cart.length} món)
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '2px 6px', fontSize: '0.7rem', color: 'var(--warning)', fontWeight: 700 }}
+                onClick={() => setLoyaltyModalOpen(true)}
+                title="Tích điểm khách quen"
+              >
+                <Gift size={12} />
+                <span>Điểm</span>
+              </button>
+            </div>
+
+            {cart.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '2px 6px', fontSize: '0.7rem' }}
+                onClick={clearCart}
+              >
+                <RotateCcw size={12} />
+                <span>Xóa</span>
+              </button>
+            )}
           </div>
 
-          {cart.length > 0 && (
-            <button
-              className="btn btn-secondary btn-sm"
-              style={{ padding: '2px 6px', fontSize: '0.7rem' }}
-              onClick={clearCart}
-            >
-              <RotateCcw size={12} />
-              <span>Xóa</span>
-            </button>
-          )}
-        </div>
-
-        <div className="card-body" style={{ padding: '0.5rem', maxHeight: '240px', overflowY: 'auto' }}>
-          {cart.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              Chưa có món nào. Đưa camera vào mã vạch để quét!
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div
-                key={item.productId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.4rem 0.2rem',
-                  borderBottom: '1px solid var(--border-color)',
-                  gap: '0.4rem',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {item.name}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 600 }}>
-                    {formatVND(item.price)}/{item.unit}
-                  </div>
-                </div>
-
-                {/* Qty Controls */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', background: 'var(--bg-secondary)', padding: '1px', borderRadius: '4px' }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '22px', height: '22px', padding: 0 }}
-                    onClick={() => updateCartQty(item.productId, item.qty - 1)}
-                  >
-                    <Minus size={10} />
-                  </button>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, minWidth: '18px', textAlign: 'center' }}>
-                    {item.qty}
-                  </span>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    style={{ width: '22px', height: '22px', padding: 0 }}
-                    onClick={() => updateCartQty(item.productId, item.qty + 1)}
-                  >
-                    <Plus size={10} />
-                  </button>
-                </div>
-
-                <div style={{ fontWeight: 800, fontSize: '0.85rem', minWidth: '65px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                  {formatVND(item.price * item.qty)}
-                </div>
-
-                <button
-                  onClick={() => removeFromCart(item.productId)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
-                >
-                  <Trash2 size={12} />
-                </button>
+          <div className="card-body" style={{ padding: '0.5rem', maxHeight: '240px', overflowY: 'auto' }}>
+            {cart.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Chưa có món nào. Đưa camera vào mã vạch hoặc vuốt sang <strong>Hàng Hóa</strong>!
               </div>
-            ))
-          )}
+            ) : (
+              cart.map((item) => (
+                <div
+                  key={item.productId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.4rem 0.2rem',
+                    borderBottom: '1px solid var(--border-color)',
+                    gap: '0.4rem',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {item.name}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 600 }}>
+                      {formatVND(item.price)}/{item.unit}
+                    </div>
+                  </div>
+
+                  {/* Qty Controls */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px', background: 'var(--bg-secondary)', padding: '1px', borderRadius: '4px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ width: '22px', height: '22px', padding: 0 }}
+                      onClick={() => updateCartQty(item.productId, item.qty - 1)}
+                    >
+                      <Minus size={10} />
+                    </button>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, minWidth: '18px', textAlign: 'center' }}>
+                      {item.qty}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ width: '22px', height: '22px', padding: 0 }}
+                      onClick={() => updateCartQty(item.productId, item.qty + 1)}
+                    >
+                      <Plus size={10} />
+                    </button>
+                  </div>
+
+                  <div style={{ fontWeight: 800, fontSize: '0.85rem', minWidth: '65px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                    {formatVND(item.price * item.qty)}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeFromCart(item.productId)}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* CATALOG QUICK PICK ON MOBILE */
+        <div className="card" style={{ marginBottom: '0.75rem' }}>
+          <div className="card-header" style={{ padding: '0.5rem 0.85rem' }}>
+            <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>
+              Danh Mục Hàng Hóa ({products.length})
+            </span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Chạm để thêm vào giỏ</span>
+          </div>
+
+          <div className="card-body" style={{ padding: '0.4rem', maxHeight: '280px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              {products.map((prod) => (
+                <div
+                  key={prod.id}
+                  onClick={() => {
+                    addToCart(prod, 1);
+                    showToast(`+1 ${prod.name}`, 'success');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.45rem 0.6rem',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.825rem' }}>{prod.name}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      Mã: {prod.barcode} • Tồn: {prod.stock} {prod.unit}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '0.85rem' }}>
+                      {formatVND(prod.price)}
+                    </div>
+                    <span className="badge badge-primary" style={{ fontSize: '0.65rem' }}>+ Thêm</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BIG BOTTOM STICKY CHECKOUT DISPLAY (Thanh toán to rõ ràng trên điện thoại) */}
       <div

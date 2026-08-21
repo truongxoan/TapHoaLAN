@@ -8,6 +8,7 @@ import { ManagerPinModal } from './components/ManagerPinModal';
 import { ShiftReportModal } from './components/ShiftReportModal';
 import { LoyaltyModal } from './components/LoyaltyModal';
 import { ConnectedDevicesModal } from './components/ConnectedDevicesModal';
+import { ManagementMenuModal } from './components/ManagementMenuModal';
 import { VietQRModal } from './components/VietQRModal';
 import { PrintInvoiceModal } from './components/PrintInvoiceModal';
 import { ToastContainer } from './components/ToastContainer';
@@ -64,6 +65,7 @@ const MainApp = () => {
       <ShiftReportModal />
       <LoyaltyModal />
       <ConnectedDevicesModal />
+      <ManagementMenuModal />
       <VietQRModal />
       <PrintInvoiceModal />
       <ToastContainer />

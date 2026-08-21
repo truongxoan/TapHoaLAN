@@ -29,20 +29,64 @@ export const MobileAddProductModal = () => {
   } = useStore();
 
   const [scanStep, setScanStep] = useState('barcode'); // 'barcode' | 'photo' | 'form'
-  const [barcode, setBarcode] = useState('');
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('instant_food');
-  const [unit, setUnit] = useState('Gói');
-  const [costPrice, setCostPrice] = useState('');
-  const [price, setPrice] = useState('');
-  const [stock, setStock] = useState('50');
-  const [hasBoxUnit, setHasBoxUnit] = useState(false);
-  const [boxUnitName, setBoxUnitName] = useState('Thùng');
-  const [boxConversion, setBoxConversion] = useState('30');
-  const [boxPrice, setBoxPrice] = useState('');
-  const [boxCostPrice, setBoxCostPrice] = useState('');
-  const [photoPreview, setPhotoPreview] = useState('');
+  const [barcode, setBarcode] = useState(() => localStorage.getItem('smartpos_draft_barcode') || '');
+  const [name, setName] = useState(() => localStorage.getItem('smartpos_draft_name') || '');
+  const [category, setCategory] = useState(() => localStorage.getItem('smartpos_draft_category') || 'instant_food');
+  const [unit, setUnit] = useState(() => localStorage.getItem('smartpos_draft_unit') || 'Gói');
+  const [costPrice, setCostPrice] = useState(() => localStorage.getItem('smartpos_draft_costPrice') || '');
+  const [price, setPrice] = useState(() => localStorage.getItem('smartpos_draft_price') || '');
+  const [stock, setStock] = useState(() => localStorage.getItem('smartpos_draft_stock') || '50');
+  const [hasBoxUnit, setHasBoxUnit] = useState(() => localStorage.getItem('smartpos_draft_hasBoxUnit') === 'true');
+  const [boxUnitName, setBoxUnitName] = useState(() => localStorage.getItem('smartpos_draft_boxUnitName') || 'Thùng');
+  const [boxConversion, setBoxConversion] = useState(() => localStorage.getItem('smartpos_draft_boxConversion') || '30');
+  const [boxPrice, setBoxPrice] = useState(() => localStorage.getItem('smartpos_draft_boxPrice') || '');
+  const [boxCostPrice, setBoxCostPrice] = useState(() => localStorage.getItem('smartpos_draft_boxCostPrice') || '');
+  const [photoPreview, setPhotoPreview] = useState(() => localStorage.getItem('smartpos_draft_photoPreview') || '');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Auto save draft to localStorage so nothing is lost if browser pauses or switches apps
+  useEffect(() => {
+    localStorage.setItem('smartpos_draft_barcode', barcode);
+    localStorage.setItem('smartpos_draft_name', name);
+    localStorage.setItem('smartpos_draft_category', category);
+    localStorage.setItem('smartpos_draft_unit', unit);
+    localStorage.setItem('smartpos_draft_costPrice', costPrice);
+    localStorage.setItem('smartpos_draft_price', price);
+    localStorage.setItem('smartpos_draft_stock', stock);
+    localStorage.setItem('smartpos_draft_hasBoxUnit', hasBoxUnit.toString());
+    localStorage.setItem('smartpos_draft_boxUnitName', boxUnitName);
+    localStorage.setItem('smartpos_draft_boxConversion', boxConversion);
+    localStorage.setItem('smartpos_draft_boxPrice', boxPrice);
+    localStorage.setItem('smartpos_draft_boxCostPrice', boxCostPrice);
+    localStorage.setItem('smartpos_draft_photoPreview', photoPreview);
+  }, [barcode, name, category, unit, costPrice, price, stock, hasBoxUnit, boxUnitName, boxConversion, boxPrice, boxCostPrice, photoPreview]);
+
+  const clearDraft = () => {
+    setBarcode('');
+    setName('');
+    setCostPrice('');
+    setPrice('');
+    setStock('50');
+    setHasBoxUnit(false);
+    setBoxPrice('');
+    setBoxCostPrice('');
+    setPhotoPreview('');
+    [
+      'smartpos_draft_barcode',
+      'smartpos_draft_name',
+      'smartpos_draft_category',
+      'smartpos_draft_unit',
+      'smartpos_draft_costPrice',
+      'smartpos_draft_price',
+      'smartpos_draft_stock',
+      'smartpos_draft_hasBoxUnit',
+      'smartpos_draft_boxUnitName',
+      'smartpos_draft_boxConversion',
+      'smartpos_draft_boxPrice',
+      'smartpos_draft_boxCostPrice',
+      'smartpos_draft_photoPreview',
+    ].forEach((k) => localStorage.removeItem(k));
+  };
 
   const fileInputRef = useRef(null);
   const qrCodeScannerRef = useRef(null);
@@ -163,13 +207,7 @@ export const MobileAddProductModal = () => {
     addProduct(payload);
     setIsUploadingPhoto(false);
     setMobileAddProductOpen(false);
-
-    // Reset fields
-    setBarcode('');
-    setName('');
-    setCostPrice('');
-    setPrice('');
-    setPhotoPreview('');
+    clearDraft();
     setScanStep('barcode');
   };
 
