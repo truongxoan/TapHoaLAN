@@ -1,0 +1,21 @@
+{
+  "taxSettings": {
+    "storeName": "TẠP HÓA THỊNH PHÁT - BÁCH HÓA GIA ĐÌNH",
+    "storeSlogan": "Hàng Tiêu Dùng - Nước Giải Khát - Mì Gia Vị Giá Sỉ & Lẻ",
+    "storeAddress": "Số 128 Đường Lê Lợi, Phường 4, Quận Gò Vấp, TP. Hồ Chí Minh",
+    "storePhone": "0908 123 456 - 028 3899 9999",
+    "storeTaxId": "0318998822-001",
+    "defaultVatRate": 8,
+    "priceIncludesTax": true,
+    "bankName": "MBBank (Ngân Hàng Quân Đội)",
+    "bankId": "MB",
+    "accountNo": "0908123456",
+    "accountName": "NGUYEN THI KIM HOA",
+    "invoiceFooterNote": "Cảm ơn quý khách đã mua sắm tại Tạp Hóa Thịnh Phát!"
+  },
+  "products": [],
+  "orders": [],
+  "purchases": [],
+  "suppliers": [],
+  "debts": []
+}
