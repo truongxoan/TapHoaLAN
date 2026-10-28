@@ -23,69 +23,48 @@ echo.
 pause
 
 where node >nul 2>&1
-if %errorlevel% neq 0 (
-  echo [LOI] May tinh chua cai Node.js! Cai Node.js LTS tai https://nodejs.org roi chay lai file nay.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto NO_NODE
 
 set "WORKDIR=%TEMP%\TapHoaLAN-chay-nhanh"
 echo Thu muc chay: %WORKDIR%
 echo.
 
 where git >nul 2>&1
-if %errorlevel% equ 0 (
-  echo [1/4] Dang lay code bang Git (chi lay file chay, khong lay Android)...
-  if exist "%WORKDIR%\.git" (
-    cd /d "%WORKDIR%"
-    git pull --ff-only origin main
-    if %errorlevel% neq 0 (
-      echo [CANH BAO] Khong pull duoc, se xoa thu muc tam va tai lai tu dau.
-      cd /d "%TEMP%"
-      rmdir /S /Q "%WORKDIR%"
-      goto GITCLONE
-    )
-  ) else (
-    goto GITCLONE
-  )
-  goto BUILD
-) else (
-  echo [CANH BAO] May chua cai Git, se dung cach tai file zip thay the.
-  goto ZIPBALL
-)
+if errorlevel 1 goto ZIPBALL
+if exist "%WORKDIR%\.git" goto PULL
+goto GITCLONE
+
+:PULL
+echo [1/4] Dang cap nhat code bang Git...
+cd /d "%WORKDIR%"
+git pull --ff-only origin main
+if errorlevel 1 goto GITCLONE_FRESH
+goto BUILD
+
+:GITCLONE_FRESH
+echo [CANH BAO] Khong pull duoc, se xoa thu muc tam va tai lai tu dau.
+cd /d "%TEMP%"
+rmdir /S /Q "%WORKDIR%"
+goto GITCLONE
 
 :GITCLONE
+echo [1/4] Dang lay code bang Git (chi lay file chay, khong lay Android)...
 git clone --depth 1 --filter=blob:none --sparse https://github.com/truongxoan/TapHoaLAN.git "%WORKDIR%"
-if %errorlevel% neq 0 (
-  echo [LOI] Khong clone duoc tu GitHub. Kiem tra mang roi chay lai.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto FAIL_CLONE
 cd /d "%WORKDIR%"
 git sparse-checkout set server.js server-lib.js package.json package-lock.json src index.html vite.config.js public
-if %errorlevel% neq 0 (
-  echo [LOI] Khong chon duoc file chay. Kiem tra lai Git roi chay lai.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto FAIL_SPARSE
 goto BUILD
 
 :ZIPBALL
+echo [CANH BAO] May chua cai Git, se dung cach tai file zip thay the.
 set "TMPZIP=%TEMP%\TapHoaLAN-chay-nhanh.zip"
 set "TMPDIR=%TEMP%\TapHoaLAN-chay-nhanh-tam"
 powershell -Command "Invoke-WebRequest -Uri 'https://github.com/truongxoan/TapHoaLAN/archive/refs/heads/main.zip' -OutFile '%TMPZIP%'"
-if not exist "%TMPZIP%" (
-  echo [LOI] Khong tai duoc tu GitHub. Kiem tra mang roi chay lai.
-  pause
-  exit /b 1
-)
+if not exist "%TMPZIP%" goto FAIL_DOWNLOAD
 rmdir /S /Q "%TMPDIR%" >nul 2>&1
 powershell -Command "Expand-Archive -Path '%TMPZIP%' -DestinationPath '%TMPDIR%' -Force"
-if not exist "%TMPDIR%\TapHoaLAN-main\server.js" (
-  echo [LOI] File tai ve thieu server.js. Hay chay lai file nay.
-  pause
-  exit /b 1
-)
+if not exist "%TMPDIR%\TapHoaLAN-main\server.js" goto FAIL_ZIP
 if not exist "%WORKDIR%" mkdir "%WORKDIR%"
 xcopy /E /Y "%TMPDIR%\TapHoaLAN-main\server.js" "%WORKDIR%\" >nul
 xcopy /E /Y "%TMPDIR%\TapHoaLAN-main\server-lib.js" "%WORKDIR%\" >nul
@@ -102,21 +81,51 @@ goto BUILD
 echo.
 echo [2/4] Dang cai thu vien...
 call npm install
-if %errorlevel% neq 0 (
-  echo [LOI] npm install that bai. Kiem tra mang roi chay lai file nay.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto FAIL_INSTALL
 echo [3/4] Dang bien dich giao dien...
 call npm run build
-if %errorlevel% neq 0 (
-  echo [LOI] npm run build that bai. Gui toan bo chu trong cua so nay de duoc ho tro.
-  pause
-  exit /b 1
-)
+if errorlevel 1 goto FAIL_BUILD
 echo [4/4] Dang khoi dong server...
 echo Mo trinh duyet tai: http://localhost:5000
 echo De dung server, bam Ctrl+C trong cua so nay.
 start "" "http://localhost:5000"
 node server.js
+echo.
+echo Server da dung. Bam phim bat ky de dong cua so.
 pause
+exit /b 0
+
+:NO_NODE
+echo [LOI] May tinh chua cai Node.js! Cai Node.js LTS tai https://nodejs.org roi chay lai file nay.
+pause
+exit /b 1
+
+:FAIL_CLONE
+echo [LOI] Khong clone duoc tu GitHub. Kiem tra mang roi chay lai.
+pause
+exit /b 1
+
+:FAIL_SPARSE
+echo [LOI] Khong chon duoc file chay. Kiem tra lai Git roi chay lai.
+pause
+exit /b 1
+
+:FAIL_DOWNLOAD
+echo [LOI] Khong tai duoc tu GitHub. Kiem tra mang roi chay lai.
+pause
+exit /b 1
+
+:FAIL_ZIP
+echo [LOI] File tai ve thieu server.js. Hay chay lai file nay.
+pause
+exit /b 1
+
+:FAIL_INSTALL
+echo [LOI] npm install that bai. Kiem tra mang roi chay lai file nay.
+pause
+exit /b 1
+
+:FAIL_BUILD
+echo [LOI] npm run build that bai. Gui toan bo chu trong cua so nay de duoc ho tro.
+pause
+exit /b 1
