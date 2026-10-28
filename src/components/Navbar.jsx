@@ -26,6 +26,8 @@ export const Navbar = () => {
     toggleTheme,
     activeTab,
     setActiveTab,
+    appMode,
+    requestAppMode,
     cart,
     openScanner,
     products,
@@ -60,9 +62,88 @@ export const Navbar = () => {
     invoices: '🧾 Hóa Đơn & Thuế',
     reports: '📊 Báo Cáo Lời Lỗ',
     settings: '⚙️ Cài Đặt Hệ Thống',
+    devices: '📱 Lịch Sử Thiết Bị & Sổ Ngày',
   };
 
   const isManagementScreen = activeTab !== 'pos' && activeTab !== 'mobile_pos';
+
+  // Direct tabs for admin mode: nothing hidden behind menus.
+  const adminTabs = [
+    { id: 'pos', label: 'Bán Hàng (POS)', icon: ShoppingCart },
+    { id: 'mobile_pos', label: '📱 Bán Điện Thoại', icon: Smartphone },
+    { id: 'import', label: '📥 Nhập Hàng', icon: PackagePlus },
+    { id: 'inventory', label: '📦 Kho Hàng', icon: Boxes },
+    { id: 'debts', label: `📖 Sổ Nợ (${activeDebtsCount})`, icon: BookOpen },
+    { id: 'invoices', label: '🧾 Hóa Đơn & Thuế', icon: Receipt },
+    { id: 'reports', label: '📊 Báo Cáo', icon: BarChart3 },
+    { id: 'devices', label: '📱 Lịch Sử & Sổ Ngày', icon: Smartphone },
+    { id: 'settings', label: '⚙️ Cài Đặt', icon: Settings },
+  ];
+
+  const modeButtons = [
+    { id: 'elder', label: '👴 Lớn tuổi' },
+    { id: 'young', label: '⚡ Người trẻ' },
+    { id: 'admin', label: '👑 Admin' },
+  ];
+
+  // Elder mode: the navbar shows ONLY Bán hàng, Nhập hàng, Chốt ca and
+  // a large "Đổi chế độ" exit button. Everything else is hidden.
+  if (appMode === 'elder') {
+    return (
+      <header className="header-nav no-print">
+        <div className="header-inner">
+          <div className="brand-logo" onClick={() => setActiveTab('pos')}>
+            <div className="brand-icon-box">
+              <Store size={28} />
+            </div>
+            <div>
+              <span className="brand-title">Tạp Hóa SmartPOS</span>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                Chế độ người lớn tuổi — chữ to, dễ bấm
+              </div>
+            </div>
+          </div>
+          <nav className="nav-tabs">
+            <button
+              type="button"
+              className={`nav-tab-btn elder-nav-btn ${activeTab === 'pos' ? 'active' : ''}`}
+              onClick={() => setActiveTab('pos')}
+            >
+              <ShoppingCart size={22} />
+              <span>Bán Hàng</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-tab-btn elder-nav-btn ${activeTab === 'import' ? 'active' : ''}`}
+              onClick={() => setActiveTab('import')}
+            >
+              <PackagePlus size={22} />
+              <span>Nhập Hàng</span>
+            </button>
+          </nav>
+          <div className="header-actions">
+            <button
+              type="button"
+              className="btn btn-secondary elder-nav-btn"
+              onClick={() => setShiftModalOpen(true)}
+              title="Chốt ca & Kiểm kê tiền mặt két (04:00 - 22:00)"
+            >
+              <Clock size={22} />
+              <span>Chốt Ca</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary elder-nav-btn"
+              onClick={() => requestAppMode('young')}
+              title="Quay về giao diện tiêu chuẩn (Người trẻ). Muốn vào Admin thì chọn 👑 Admin ở đó và nhập PIN chủ tiệm."
+            >
+              <span>🔄 Đổi Chế Độ</span>
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="header-nav no-print">
@@ -76,6 +157,11 @@ export const Navbar = () => {
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span className="brand-title">Tạp Hóa SmartPOS</span>
               <span className="brand-badge">PRO v3.2</span>
+              {appMode === 'admin' && (
+                <span className="brand-badge" style={{ background: 'var(--danger)', marginLeft: '6px' }}>
+                  ADMIN
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>
               Bán hàng & Mạng LAN Cục Bộ
@@ -85,7 +171,7 @@ export const Navbar = () => {
 
         {/* Primary Navigation Tabs */}
         <nav className="nav-tabs">
-          {primaryTabs.map((item) => {
+          {(appMode === 'admin' ? adminTabs : primaryTabs).map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -116,8 +202,8 @@ export const Navbar = () => {
             );
           })}
 
-          {/* Active Management Screen Pill */}
-          {isManagementScreen && (
+          {/* Active Management Screen Pill (not needed in admin: tabs are direct) */}
+          {isManagementScreen && appMode !== 'admin' && (
             <button
               type="button"
               className="nav-tab-btn active"
@@ -133,6 +219,26 @@ export const Navbar = () => {
 
         {/* Header Right Actions */}
         <div className="header-actions">
+          {/* Mode switcher: Admin goes through the PIN gate in requestAppMode */}
+          <div className="mode-switcher" role="group" aria-label="Chế độ giao diện">
+            {modeButtons.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={`mode-switcher-btn ${appMode === mode.id ? 'active' : ''}`}
+                onClick={() => requestAppMode(mode.id)}
+                title={
+                  mode.id === 'admin'
+                    ? 'Chế độ Admin: cần nhập PIN chủ tiệm nếu chưa mở khóa'
+                    : mode.id === 'elder'
+                      ? 'Chế độ người lớn tuổi: chữ to, bán hàng đơn giản'
+                      : 'Chế độ người trẻ: đầy đủ công cụ bán hàng tiêu chuẩn'
+                }
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
           {/* Central Management Menu Gear Button (Nút Bánh Răng Quản Lý) */}
           <button
             type="button"

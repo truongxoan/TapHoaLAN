@@ -25,6 +25,8 @@ export const POSScreen = () => {
   const {
     products,
     categories,
+    orders,
+    appMode,
     cart,
     addToCart,
     updateCartQty,
@@ -44,6 +46,7 @@ export const POSScreen = () => {
     netTotal,
     cartGrandTotal,
     checkoutOrder,
+    checkoutProcessing,
     openScanner,
     setActiveInvoice,
     setVietQrData,
@@ -55,6 +58,37 @@ export const POSScreen = () => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+
+  // Young-mode quick utilities: favourite products (pinned by the star
+  // on each product card), persisted in localStorage. The strip itself
+  // renders only when appMode === 'young'.
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('smartpos_favorite_products') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('smartpos_favorite_products', JSON.stringify(favorites));
+    } catch {}
+  }, [favorites]);
+  const toggleFavorite = (productId) => {
+    setFavorites((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
+  };
+  const isToday = (value) => {
+    if (!value) return false;
+    const d = new Date(value);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  };
+  const todayOrders = (orders || []).filter((o) => isToday(o.createdAt || o.date));
+  const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const lowStockCount = products.filter((p) => p.stock <= p.minStock).length;
+  const favoriteProducts = products.filter((p) => favorites.includes(p.id));
   const [cashierName, setCashierName] = useState(() => localStorage.getItem('smartpos_cashier_name') || 'Quầy 1');
 
   // Modals
@@ -97,7 +131,7 @@ export const POSScreen = () => {
       showToast('Số tiền khách đưa chưa đủ!', 'warning');
       return;
     }
-    const completedOrder = checkoutOrder({
+    const completedOrder = await checkoutOrder({
       paymentMethod: 'cash',
       receivedAmount: receivedNum,
     });
@@ -107,17 +141,17 @@ export const POSScreen = () => {
     }
   };
 
-  // Handle VietQR Payment
-  const handleVietQrCheckout = () => {
+  // Handle VietQR Payment: create the pending order FIRST so the QR
+  // content uses the real server order code.
+  const handleVietQrCheckout = async () => {
     if (cart.length === 0) {
       showToast('Chưa có hàng trong đơn!', 'warning');
       return;
     }
-    const orderId = `HD-${Date.now().toString().slice(-6)}`;
-    setVietQrData({
-      amount: cartGrandTotal,
-      orderId,
-    });
+    const pendingOrder = await checkoutOrder({ paymentMethod: 'vietqr', receivedAmount: cartGrandTotal });
+    if (pendingOrder) {
+      setVietQrData({ amount: pendingOrder.total, orderId: pendingOrder.code, orderDbId: pendingOrder.id });
+    }
   };
 
   // Handle Debt Checkout (Ghi nợ)
@@ -129,14 +163,14 @@ export const POSScreen = () => {
     setDebtModalOpen(true);
   };
 
-  const handleConfirmDebtCheckout = (e) => {
+  const handleConfirmDebtCheckout = async (e) => {
     e.preventDefault();
     if (!customer.name || customer.name === 'Khách lẻ') {
       showToast('Vui lòng nhập tên khách quen để ghi sổ nợ!', 'warning');
       return;
     }
 
-    const completedOrder = checkoutOrder({
+    const completedOrder = await checkoutOrder({
       paymentMethod: 'debt',
       debtNote,
     });
@@ -249,6 +283,44 @@ export const POSScreen = () => {
               </button>
             </div>
           </div>
+
+          {/* Young-mode quick utilities strip (hidden in elder/admin) */}
+          {appMode === 'young' && (
+            <div
+              className="card"
+              style={{ padding: '0.6rem 0.75rem', marginBottom: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}
+            >
+              <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>⚡ Tiện ích nhanh hôm nay:</span>
+              <span style={{ fontSize: '0.8rem' }}>🧾 {todayOrders.length} đơn</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--success)' }}>
+                💰 {formatVND(todayRevenue)}
+              </span>
+              <span style={{ fontSize: '0.8rem', color: lowStockCount > 0 ? 'var(--warning)' : 'var(--text-secondary)' }}>
+                ⚠️ Sắp hết hàng: {lowStockCount} món
+              </span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                ⭐ Bấm ngôi sao trên thẻ hàng để ghim vào mục yêu thích bên dưới.
+              </span>
+              {favoriteProducts.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', alignItems: 'center', width: '100%' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Yêu thích:</span>
+                  {favoriteProducts.map((prod) => (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontWeight: 700 }}
+                      disabled={prod.stock <= 0}
+                      onClick={() => addToCart(prod, 1)}
+                      title={`Thêm nhanh ${prod.name} — ${formatVND(prod.price)}`}
+                    >
+                      ⭐ {prod.name} — {formatVND(prod.price)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Categories Chips */}
           <div
@@ -364,6 +436,21 @@ export const POSScreen = () => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '3px' }}>
+                      {/* Favourite pin (young mode only; the strip above shows the pinned chips) */}
+                      {appMode === 'young' && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '2px 5px', fontSize: '0.7rem', borderRadius: '4px', color: favorites.includes(prod.id) ? 'var(--warning)' : 'var(--text-muted)' }}
+                          title={favorites.includes(prod.id) ? 'Bỏ ghim khỏi yêu thích' : 'Ghim vào yêu thích'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(prod.id);
+                          }}
+                        >
+                          {favorites.includes(prod.id) ? '★' : '☆'}
+                        </button>
+                      )}
                       {/* Add Single Unit */}
                       <button
                         className="btn btn-primary btn-sm"
@@ -645,13 +732,13 @@ export const POSScreen = () => {
 
               {/* VietQR button */}
               <button
-                className="btn btn-primary btn-md"
+                className={`btn btn-primary btn-md ${checkoutProcessing ? 'is-processing' : ''}`}
                 style={{ padding: '0.5rem' }}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || checkoutProcessing}
                 onClick={handleVietQrCheckout}
               >
                 <QrCode size={16} />
-                <span>VietQR</span>
+                <span>{checkoutProcessing ? 'Đang lưu…' : 'VietQR'}</span>
               </button>
 
               {/* Debt button */}
@@ -800,11 +887,12 @@ export const POSScreen = () => {
                 Hủy
               </button>
               <button
-                className="btn btn-success btn-xl"
+                className={`btn btn-success btn-xl ${checkoutProcessing ? 'is-processing' : ''}`}
                 style={{ flex: 1 }}
+                disabled={checkoutProcessing}
                 onClick={handleConfirmCashCheckout}
               >
-                Hoàn Tất & Lưu Đơn
+                {checkoutProcessing ? 'Đang lưu đơn…' : 'Hoàn Tất & Lưu Đơn'}
               </button>
             </div>
           </div>

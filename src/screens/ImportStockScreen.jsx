@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   PackagePlus,
   ScanBarcode,
@@ -23,6 +23,8 @@ export const ImportStockScreen = () => {
     suppliers,
     purchases,
     importStock,
+    lookupProductByBarcode,
+    managerAuthHeaders,
     openScanner,
     showToast,
     categories,
@@ -34,6 +36,9 @@ export const ImportStockScreen = () => {
   const [importItems, setImportItems] = useState([]);
   const [notes, setNotes] = useState('');
   const [quickBarcode, setQuickBarcode] = useState('');
+  const [scanBanner, setScanBanner] = useState(null); // {barcode, product} | {barcode, notFound:true}
+  const [quickCreate, setQuickCreate] = useState(null); // {barcode, name, unit, costPrice, price, stock}
+  const [prefillChecked, setPrefillChecked] = useState(false);
 
   const formatVND = (val) =>
     new Intl.NumberFormat('vi-VN').format(Math.round(val || 0)) + ' đ';
@@ -42,6 +47,19 @@ export const ImportStockScreen = () => {
     const d = new Date(isoString);
     return `${d.toLocaleTimeString('vi-VN')} - ${d.toLocaleDateString('vi-VN')}`;
   };
+
+  // If POS scanned an unknown barcode, prefill Import with it on first render.
+  useEffect(() => {
+    if (prefillChecked) return;
+    setPrefillChecked(true);
+    try {
+      const pre = sessionStorage.getItem('smartpos_import_prefill_barcode');
+      if (pre) {
+        sessionStorage.removeItem('smartpos_import_prefill_barcode');
+        handleScanForImport(pre);
+      }
+    } catch { /* ignore */ }
+  }, [prefillChecked]);
 
   // Add product to import list
   const handleAddProductToImport = (prod) => {
@@ -83,14 +101,96 @@ export const ImportStockScreen = () => {
     }
   };
 
-  // Handle scanned barcode
-  const handleScanForImport = (barcode) => {
-    const found = products.find((p) => p.barcode === barcode);
+  // Handle scanned barcode: server lookup first, then local products.
+  const handleScanForImport = async (barcode) => {
+    const code = String(barcode || '').trim();
+    if (!code) return;
+    let found = null;
+    if (lookupProductByBarcode) {
+      const res = await lookupProductByBarcode(code);
+      if (res.found) found = res.product;
+    } else {
+      found = products.find((p) => p.barcode === code);
+    }
     if (found) {
       handleAddProductToImport(found);
+      setScanBanner({ barcode: code, product: found });
+      setQuickCreate(null);
     } else {
-      showToast(`Mã vạch ${barcode} chưa có trong kho. Hãy thêm sản phẩm ở mục Kho trước!`, 'warning');
+      // NEW: inline quick-create instead of sending the user to Inventory.
+      setScanBanner({ barcode: code, notFound: true });
+      setQuickCreate({ barcode: code, name: '', unit: 'Gói', costPrice: '', price: '', stock: '' });
+      showToast(`Mã mới ${code} chưa có trong kho — tạo nhanh ngay tại đây.`, 'info');
     }
+  };
+
+  const handleSaveQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!quickCreate || !quickCreate.name.trim()) {
+      showToast('Vui lòng nhập tên sản phẩm!', 'warning');
+      return;
+    }
+    if (quickCreate.price === '' || Number(quickCreate.price) < 0) {
+      showToast('Vui lòng nhập giá bán hợp lệ!', 'warning');
+      return;
+    }
+    const payload = {
+      barcode: quickCreate.barcode,
+      name: quickCreate.name.trim(),
+      unit: quickCreate.unit || 'Gói',
+      costPrice: Number(quickCreate.costPrice) || 0,
+      price: Number(quickCreate.price),
+      stock: Number(quickCreate.stock) || 0,
+    };
+    // Wait for the server product (with its real SP-xxxx id) before adding
+    // to the import list, so the import row always references a real product
+    // and the stock update on save can find it.
+    const wsHost = window.location.hostname || 'localhost';
+    let saved = null;
+    try {
+      const res = await fetch(`http://${wsHost}:5000/api/products/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        if (res.status === 401) showToast('Cần mở khóa quyền chủ tiệm để tạo sản phẩm có giá.', 'danger');
+        else showToast(data.error || 'Không lưu được sản phẩm.', 'danger');
+        return;
+      }
+      saved = data.product;
+    } catch {
+      showToast('Không kết nối được server để tạo sản phẩm.', 'danger');
+      return;
+    }
+    // Keep the local product list in sync (addProduct is idempotent here:
+    // the server product already exists, so this only refreshes local state).
+    setImportItems((prev) => {
+      if (prev.some((it) => it.productId === saved.id || it.barcode === saved.barcode)) return prev;
+      return [
+        ...prev,
+        {
+          productId: saved.id,
+          barcode: saved.barcode,
+          name: saved.name,
+          unit: saved.unit || 'Gói',
+          hasBoxUnit: false,
+          boxUnitName: 'Thùng',
+          boxConversion: 1,
+          isBox: false,
+          importQty: 20,
+          boxCostPrice: saved.costPrice || 0,
+          costPrice: saved.costPrice || 0,
+          retailPrice: saved.price || 0,
+          boxPrice: saved.price || 0,
+          vatRate: 8,
+        },
+      ];
+    });
+    setScanBanner({ barcode: saved.barcode, product: saved });
+    setQuickCreate(null);
+    showToast(`Đã tạo nhanh: ${saved.name} — giá bán ${new Intl.NumberFormat('vi-VN').format(saved.price)} đ`, 'success');
   };
 
   // Update item field
@@ -249,7 +349,8 @@ export const ImportStockScreen = () => {
                       handleAddProductToImport(match);
                       setQuickBarcode('');
                     } else {
-                      showToast('Không tìm thấy sản phẩm trong danh mục kho!', 'warning');
+                      handleScanForImport(quickBarcode.trim());
+                      setQuickBarcode('');
                     }
                   }
                 }}
@@ -275,6 +376,70 @@ export const ImportStockScreen = () => {
             </select>
           </div>
 
+          {/* Scan result banner: always shows the current selling price */}
+          {scanBanner && (
+            <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1rem', borderLeft: '4px solid var(--primary)' }}>
+              {scanBanner.product ? (
+                <div>
+                  <div style={{ fontWeight: 800 }}>✅ Đã tìm thấy: {scanBanner.product.name}</div>
+                  <div style={{ fontSize: '0.85rem' }}>
+                    Mã vạch: <span style={{ fontFamily: 'var(--font-mono)' }}>{scanBanner.barcode}</span>
+                    {' '}•{' '}
+                    <strong>Giá bán hiện tại: {formatVND(scanBanner.product.price || scanBanner.product.retailPrice || 0)}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontWeight: 800 }}>🆕 Mã mới chưa có trong kho: {scanBanner.barcode}</div>
+                  <div style={{ fontSize: '0.85rem' }}>Điền form tạo nhanh bên dưới, sản phẩm sẽ vào phiếu nhập ngay sau khi lưu.</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick-create form for unknown barcodes */}
+          {quickCreate && (
+            <form onSubmit={handleSaveQuickCreate} className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              <div style={{ fontWeight: 800, marginBottom: '0.5rem' }}>Tạo nhanh sản phẩm mới</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <label className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <span className="form-label">Mã vạch</span>
+                  <input className="form-control" value={quickCreate.barcode} readOnly />
+                </label>
+                <label className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <span className="form-label">Tên sản phẩm *</span>
+                  <input className="form-control" value={quickCreate.name} onChange={(e) => setQuickCreate({ ...quickCreate, name: e.target.value })} placeholder="VD: Mì Hảo Hảo tôm chua cay" autoFocus />
+                </label>
+                <label className="form-group">
+                  <span className="form-label">Đơn vị</span>
+                  <input className="form-control" value={quickCreate.unit} onChange={(e) => setQuickCreate({ ...quickCreate, unit: e.target.value })} />
+                </label>
+                <label className="form-group">
+                  <span className="form-label">Tồn đầu</span>
+                  <input type="number" min="0" className="form-control" value={quickCreate.stock} onChange={(e) => setQuickCreate({ ...quickCreate, stock: e.target.value })} />
+                </label>
+                <label className="form-group">
+                  <span className="form-label">Giá vốn (đ)</span>
+                  <input type="number" min="0" className="form-control" value={quickCreate.costPrice} onChange={(e) => setQuickCreate({ ...quickCreate, costPrice: e.target.value })} />
+                </label>
+                <label className="form-group">
+                  <span className="form-label">Giá bán * (đ)</span>
+                  <input type="number" min="0" className="form-control" value={quickCreate.price} onChange={(e) => setQuickCreate({ ...quickCreate, price: e.target.value })} />
+                </label>
+              </div>
+              <div style={{ marginTop: '0.5rem', fontWeight: 800, color: 'var(--primary)' }}>
+                Giá bán: {quickCreate.price === '' ? '—' : formatVND(Number(quickCreate.price) || 0)}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Mã hàng tự động: do server cấp khi lưu (dạng SP-xxxx), không cần nhập.
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                <button type="submit" className="btn btn-success">Lưu &amp; Thêm Vào Phiếu Nhập</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setQuickCreate(null); setScanBanner(null); }}>Hủy</button>
+              </div>
+            </form>
+          )}
+
           {/* Import Items Table */}
           <div className="card">
             <div className="card-header" style={{ padding: '0.65rem 1rem' }}>
@@ -294,6 +459,7 @@ export const ImportStockScreen = () => {
                     <th style={{ padding: '0.6rem 0.5rem' }}>Đơn Vị Nhập</th>
                     <th style={{ padding: '0.6rem 0.5rem', width: '100px' }}>Số Lượng</th>
                     <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>Giá Vốn Nhập (đ)</th>
+                    <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>Giá Bán Hiện Tại</th>
                     <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>Vào Kho Lẻ</th>
                     <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right' }}>Thành Tiền</th>
                     <th style={{ padding: '0.6rem 0.5rem', width: '40px' }}></th>
@@ -302,7 +468,7 @@ export const ImportStockScreen = () => {
                 <tbody>
                   {importItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
                         <Package size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.4 }} />
                         <div>Chưa có mặt hàng nào trong phiếu nhập.</div>
                         <div style={{ fontSize: '0.75rem' }}>Quét mã vạch hoặc chọn từ danh sách ở trên</div>
@@ -379,6 +545,10 @@ export const ImportStockScreen = () => {
                                 onChange={(e) => updateImportItem(item.productId, 'costPrice', e.target.value)}
                               />
                             )}
+                          </td>
+
+                          <td style={{ padding: '0.55rem 0.5rem', textAlign: 'right', fontWeight: 800, color: 'var(--primary)' }}>
+                            {formatVND(item.retailPrice || 0)}
                           </td>
 
                           {/* Base units added to warehouse */}

@@ -34,6 +34,7 @@ export const MobilePOSScreen = () => {
     clearCart,
     cartGrandTotal,
     checkoutOrder,
+    checkoutProcessing,
     setActiveInvoice,
     setVietQrData,
     isLanConnected,
@@ -158,9 +159,9 @@ export const MobilePOSScreen = () => {
     localStorage.setItem('smartpos_cashier_name', name);
   };
 
-  const handleConfirmCash = () => {
+  const handleConfirmCash = async () => {
     const receivedNum = Number(cashReceived) || cartGrandTotal;
-    const completed = checkoutOrder({
+    const completed = await checkoutOrder({
       paymentMethod: 'cash',
       receivedAmount: receivedNum,
     });
@@ -168,12 +169,12 @@ export const MobilePOSScreen = () => {
     if (completed) setActiveInvoice(completed);
   };
 
-  const handleConfirmDebt = () => {
+  const handleConfirmDebt = async () => {
     if (!customerName.trim()) {
       showToast('Vui lòng nhập tên khách ghi nợ!', 'warning');
       return;
     }
-    const completed = checkoutOrder({
+    const completed = await checkoutOrder({
       paymentMethod: 'debt',
       customerName,
     });
@@ -576,11 +577,13 @@ export const MobilePOSScreen = () => {
             </button>
 
             <button
-              className="btn btn-primary"
-              disabled={cart.length === 0}
-              onClick={() => {
-                const orderId = `HD-${Date.now().toString().slice(-6)}`;
-                setVietQrData({ amount: cartGrandTotal, orderId });
+              className={`btn btn-primary ${checkoutProcessing ? 'is-processing' : ''}`}
+              disabled={cart.length === 0 || checkoutProcessing}
+              onClick={async () => {
+                const pendingOrder = await checkoutOrder({ paymentMethod: 'vietqr', receivedAmount: cartGrandTotal });
+                if (pendingOrder) {
+                  setVietQrData({ amount: pendingOrder.total, orderId: pendingOrder.code, orderDbId: pendingOrder.id });
+                }
               }}
             >
               <QrCode size={16} />

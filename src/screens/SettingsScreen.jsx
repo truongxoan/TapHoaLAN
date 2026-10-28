@@ -27,6 +27,9 @@ import { exportStoreToExcel } from '../utils/excelExporter';
 
 export const SettingsScreen = () => {
   const {
+    appMode,
+    requestAppMode,
+    isPinUnlocked,
     taxSettings,
     setTaxSettings,
     suppliers,
@@ -47,6 +50,10 @@ export const SettingsScreen = () => {
     lastBackupTime,
     shiftsHistory,
     setMobileConnectOpen,
+    setActiveTab,
+    deviceId,
+    deviceName,
+    setDeviceName,
     showToast,
   } = useStore();
 
@@ -176,7 +183,86 @@ export const SettingsScreen = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1.25rem' }}>
+      {/* Interface mode selection (Admin card goes through the PIN gate) */}
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="card-header">
+          <span style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+            <span>🎛️ Chế Độ Giao Diện</span>
+          </span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Đang dùng: {appMode === 'elder' ? 'Người lớn tuổi' : appMode === 'admin' ? 'Admin (Chủ tiệm)' : 'Người trẻ'}
+          </span>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
+            <div style={{ border: appMode === 'elder' ? '2px solid var(--primary)' : '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem' }}>👴 Người lớn tuổi</div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0.75rem' }}>
+                Chữ to, nút to, chỉ bán hàng đơn giản: tìm hàng, thêm vào giỏ, thu Tiền mặt / VietQR / Ghi nợ. Không hiện giá vốn, VAT, tích điểm hay báo cáo.
+              </p>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => requestAppMode('elder')}>
+                {appMode === 'elder' ? 'Đang dùng' : 'Dùng chế độ này'}
+              </button>
+            </div>
+            <div style={{ border: appMode === 'young' ? '2px solid var(--primary)' : '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem' }}>⚡ Người trẻ</div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0.75rem' }}>
+                Giao diện bán hàng tiêu chuẩn đầy đủ, thêm strip “Tiện ích nhanh”: đơn và doanh thu hôm nay, món sắp hết hàng, và hàng yêu thích ghim nhanh.
+              </p>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => requestAppMode('young')}>
+                {appMode === 'young' ? 'Đang dùng' : 'Dùng chế độ này'}
+              </button>
+            </div>
+            <div style={{ border: appMode === 'admin' ? '2px solid var(--danger)' : '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.9rem' }}>
+              <div style={{ fontWeight: 800, fontSize: '1rem' }}>👑 Admin (Chủ tiệm)</div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0.75rem' }}>
+                Tất cả chức năng, tab trực tiếp không giấu sau menu. Cần nhập PIN chủ tiệm nếu chưa mở khóa; tắt trình duyệt hoặc khóa PIN là thoát Admin, không lưu trạng thái mở khóa.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => requestAppMode('admin')}
+              >
+                {appMode === 'admin' ? 'Đang dùng' : isPinUnlocked ? 'Vào chế độ Admin' : 'Nhập PIN để vào Admin'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Device identity: this is what admin sees in per-device history */}
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="card-header">
+          <span style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+            <span>📱 Tên thiết bị này</span>
+          </span>
+        </div>
+        <div className="card-body">
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 0 }}>
+            Mỗi trình duyệt là một thiết bị. Đặt tên dễ nhớ như “Quầy 1” hay “Điện thoại chị Lan” để chủ tiệm nhìn lịch sử là biết bill từ máy nào.
+            Mã thiết bị: <code>{deviceId}</code> (tự tạo một lần, xóa dữ liệu trình duyệt sẽ tạo mã mới).
+          </p>
+          <form
+            onSubmit={(e) => { e.preventDefault(); setDeviceName(deviceName); showToast(`Đã đặt tên thiết bị: ${deviceName}`, 'success'); }}
+            style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
+          >
+            <input
+              className="form-control"
+              style={{ flex: '1 1 220px' }}
+              value={deviceName}
+              onChange={(e) => setDeviceName(e.target.value)}
+              maxLength={60}
+              aria-label="Tên thiết bị"
+            />
+            <button type="submit" className="btn btn-primary btn-sm">Lưu tên thiết bị</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveTab('devices')}>
+              Xem Lịch sử thiết bị &amp; Sổ ngày
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <div className="settings-grid">
         {/* LEFT COLUMN: Store Info, Tax & Auto-Backup */}
         <div>
           {/* HOURLY AUTO-BACKUP SYSTEM (Tự động sao lưu theo giờ) */}

@@ -17,7 +17,7 @@ const INITIAL_DEBTS = [
   {
     id: 'NO-001',
     customerName: 'Chị Lan (Bán cơm kế bên)',
-    phone: '0903 111 222',
+    phone: '', // DEMO: số điện thoại mẫu đã được gỡ
     totalDebt: 155000,
     remainingDebt: 155000,
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
@@ -34,7 +34,7 @@ const INITIAL_DEBTS = [
   {
     id: 'NO-002',
     customerName: 'Anh Hùng (Tổ trưởng)',
-    phone: '0912 333 444',
+    phone: '', // DEMO: số điện thoại mẫu đã được gỡ
     totalDebt: 370000,
     remainingDebt: 170000,
     createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
@@ -62,7 +62,7 @@ const INITIAL_LOYALTY = [
     id: 'LOYALTY-001',
     name: 'Chị Lan',
     phoneLast4: '8899',
-    fullPhone: '0903 888 899',
+    fullPhone: '', // DEMO: chỉ giữ last4
     points: 125,
     totalSpent: 1250000,
     createdAt: new Date().toISOString(),
@@ -71,7 +71,7 @@ const INITIAL_LOYALTY = [
     id: 'LOYALTY-002',
     name: 'Anh Hùng',
     phoneLast4: '3344',
-    fullPhone: '0912 333 344',
+    fullPhone: '', // DEMO: chỉ giữ last4
     points: 210,
     totalSpent: 2100000,
     createdAt: new Date().toISOString(),
@@ -80,7 +80,7 @@ const INITIAL_LOYALTY = [
     id: 'LOYALTY-003',
     name: 'Cô Mai',
     phoneLast4: '5566',
-    fullPhone: '0988 555 566',
+    fullPhone: '', // DEMO: chỉ giữ last4
     points: 80,
     totalSpent: 800000,
     createdAt: new Date().toISOString(),
@@ -91,7 +91,70 @@ export const StoreProvider = ({ children }) => {
   // Theme & Navigation
   const [theme, setTheme] = useState(() => localStorage.getItem('smartpos_theme') || 'dark');
   const [activeTab, setActiveTab] = useState('pos');
+
+  // Interface mode: 'elder' (large text, simplified) | 'young' (full
+  // standard tools) | 'admin' (all screens, PIN-gated). Admin is NEVER
+  // restored from storage: on reload without a session token it falls
+  // back to 'young' (see the mode effect below).
+  const [appMode, setAppModeState] = useState(() => {
+    const saved = localStorage.getItem('smartpos_app_mode');
+    if (saved === 'elder' || saved === 'young') return saved;
+    return 'young';
+  });
+  const isElderMode = appMode === 'elder';
+  const isAdminMode = appMode === 'admin';
+  const setAppMode = useCallback((mode) => {
+    if (mode === 'elder' || mode === 'young' || mode === 'admin') setAppModeState(mode);
+  }, []);
   const [categories] = useState(INITIAL_CATEGORIES);
+
+  // Stable device identity: one id per browser, created once. Clearing
+  // browser storage creates a NEW identity — that is intentional, because
+  // there is no account on a LAN POS to tie a wiped browser back to.
+  const [deviceId] = useState(() => {
+    try {
+      let id = localStorage.getItem('smartpos_device_id');
+      if (!id) {
+        id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `dev-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+        localStorage.setItem('smartpos_device_id', id);
+      }
+      return id;
+    } catch {
+      return `dev-${Date.now()}`;
+    }
+  });
+  const defaultDeviceName = () => {
+    try {
+      const ua = navigator.userAgent || '';
+      const isMobile = /mobile|iphone|android|ipad/i.test(ua);
+      const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Trình duyệt';
+      return `${isMobile ? 'Điện thoại' : 'Máy tính'} — ${browser}`;
+    } catch {
+      return 'Máy tính — Trình duyệt';
+    }
+  };
+  const [deviceName, setDeviceNameState] = useState(() => {
+    try { return localStorage.getItem('smartpos_device_name') || defaultDeviceName(); } catch { return 'Máy tính — Trình duyệt'; }
+  });
+  const setDeviceName = useCallback((name) => {
+    const clean = String(name || '').trim().slice(0, 60);
+    if (!clean) return;
+    setDeviceNameState(clean);
+    try {
+      localStorage.setItem('smartpos_device_name', clean);
+      // Keep the legacy cashier-name key in sync: older code reads it.
+      localStorage.setItem('smartpos_cashier_name', clean);
+    } catch { /* storage unavailable */ }
+  }, []);
+  // Checkout processing flag: screens disable their pay buttons while a
+  // payment is being saved, and show a loading state instead of letting
+  // a second tap create a duplicate order.
+  const [checkoutProcessing, setCheckoutProcessing] = useState(false);
+  // Brief success pop after a payment is saved on the server (rendered by
+  // App.jsx). It is set ONLY after the server confirms the order.
+  const [paymentSuccessOrder, setPaymentSuccessOrder] = useState(null);
 
   // LAN Real-time Sync State & Connected Devices
   const [isLanConnected, setIsLanConnected] = useState(false);
@@ -101,9 +164,10 @@ export const StoreProvider = ({ children }) => {
   const [managementMenuOpen, setManagementMenuOpen] = useState(false);
   const wsRef = useRef(null);
 
-  // MANAGER PIN STATE (Mã PIN bảo mật chủ tiệm: Mặc định 1233)
-  const [managerPin, setManagerPin] = useState(() => localStorage.getItem('smartpos_manager_pin') || '1233');
-  const [isPinUnlocked, setIsPinUnlocked] = useState(false);
+  // MANAGER AUTH: only a short-lived token lives in sessionStorage.
+  // The PIN itself is never stored in localStorage or in client state.
+  const [managerToken, setManagerToken] = useState(() => sessionStorage.getItem('smartpos_manager_token') || '');
+  const [isPinUnlocked, setIsPinUnlocked] = useState(() => !!sessionStorage.getItem('smartpos_manager_token'));
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinTargetAction, setPinTargetAction] = useState(null);
 
@@ -236,6 +300,19 @@ export const StoreProvider = ({ children }) => {
     localStorage.setItem('smartpos_theme', theme);
   }, [theme]);
 
+  // Apply the mode class (same pattern as the theme above) and persist
+  // elder/young only. Admin is session-only: it is never written to
+  // localStorage, so a reload without a manager token always lands back
+  // on 'young' via the state initializer above.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('mode-elder', 'mode-young', 'mode-admin');
+    root.classList.add(`mode-${appMode}`);
+    if (appMode === 'elder' || appMode === 'young') {
+      localStorage.setItem('smartpos_app_mode', appMode);
+    }
+  }, [appMode]);
+
   useEffect(() => {
     localStorage.setItem('smartpos_taphoa_products', JSON.stringify(products));
   }, [products]);
@@ -273,10 +350,6 @@ export const StoreProvider = ({ children }) => {
   }, [printerSettings]);
 
   useEffect(() => {
-    localStorage.setItem('smartpos_manager_pin', managerPin);
-  }, [managerPin]);
-
-  useEffect(() => {
     localStorage.setItem('smartpos_backup_snapshots', JSON.stringify(backupSnapshots));
   }, [backupSnapshots]);
 
@@ -309,7 +382,8 @@ export const StoreProvider = ({ children }) => {
   // Broadcast data changes to LAN Server
   const broadcastLanUpdate = useCallback((fullPayload) => {
     if (wsRef.current && wsRef.current.readyState === 1) {
-      wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATE', payload: fullPayload }));
+      const token = sessionStorage.getItem('smartpos_manager_token');
+      wsRef.current.send(JSON.stringify({ type: 'DATA_UPDATE', payload: fullPayload, token: token || undefined }));
     }
   }, []);
 
@@ -326,31 +400,94 @@ export const StoreProvider = ({ children }) => {
     [isPinUnlocked]
   );
 
-  const unlockManagerPin = (enteredPin) => {
-    if (enteredPin === managerPin) {
-      setIsPinUnlocked(true);
-      return true;
+  // Mode switch with the admin PIN gate: switching to admin while the
+  // manager session is locked opens the PIN modal and only switches
+  // after a successful unlock (ManagerPinModal runs pinTargetAction).
+  // Leaving admin or switching between elder/young needs no PIN.
+  const requestAppMode = useCallback(
+    (mode) => {
+      if (mode === 'admin' && !isPinUnlocked) {
+        requireManagerPin(() => setAppModeState('admin'));
+        return;
+      }
+      // Elder mode only offers Bán hàng + Nhập hàng, so never strand the
+      // user on a screen its navbar cannot reach (e.g. Reports).
+      if (mode === 'elder') {
+        setActiveTab((prev) => (prev === 'pos' || prev === 'import' ? prev : 'pos'));
+      }
+      setAppMode(mode);
+    },
+    [isPinUnlocked, requireManagerPin, setAppMode]
+  );
+
+  const getManagerToken = useCallback(() => sessionStorage.getItem('smartpos_manager_token') || '', []);
+  const managerAuthHeaders = useCallback(() => {
+    const token = sessionStorage.getItem('smartpos_manager_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }, []);
+
+  const unlockManagerPin = async (enteredPin) => {
+    const wsHost = window.location.hostname || 'localhost';
+    try {
+      const res = await fetch(`http://${wsHost}:5000/api/auth/manager`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: enteredPin }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.token) {
+        sessionStorage.setItem('smartpos_manager_token', data.token);
+        setManagerToken(data.token);
+        setIsPinUnlocked(true);
+        return true;
+      }
+      if (res.status === 429) showToast('Nhập sai PIN quá nhiều lần, thử lại sau 5 phút.', 'danger');
+      return false;
+    } catch {
+      return false;
     }
-    return false;
   };
 
   const lockManagerPin = () => {
+    const token = sessionStorage.getItem('smartpos_manager_token');
+    sessionStorage.removeItem('smartpos_manager_token');
+    setManagerToken('');
     setIsPinUnlocked(false);
+    // Locking the manager session also leaves admin mode immediately.
+    setAppModeState('young');
+    if (token) {
+      const wsHost = window.location.hostname || 'localhost';
+      fetch(`http://${wsHost}:5000/api/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     showToast('Đã khóa quyền chủ tiệm!', 'info');
   };
 
-  const updateManagerPin = (newPin) => {
-    setManagerPin(newPin);
-    localStorage.setItem('smartpos_manager_pin', newPin);
-
+  // updateManagerPin(oldPin, newPin) — also accepts a single newPin when
+  // the manager is already unlocked (token auth still applies server-side).
+  const updateManagerPin = async (oldPin, newPin) => {
+    const nextPin = newPin || oldPin;
+    const prevPin = newPin ? oldPin : '';
     const wsHost = window.location.hostname || 'localhost';
-    fetch(`http://${wsHost}:5000/api/pin/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: newPin }),
-    }).catch(() => {});
-
-    showToast(`Đã đổi mã PIN bảo mật thành: ${newPin}`, 'success');
+    try {
+      const res = await fetch(`http://${wsHost}:5000/api/pin/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+        body: JSON.stringify({ oldPin: prevPin, newPin: nextPin }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        showToast('Đã đổi mã PIN chủ tiệm thành công!', 'success');
+        return true;
+      }
+      showToast(data.error || 'Đổi PIN thất bại. Kiểm tra mã PIN cũ và quyền chủ tiệm.', 'danger');
+      return false;
+    } catch {
+      showToast('Không kết nối được server để đổi PIN.', 'danger');
+      return false;
+    }
   };
 
   // Save Shift Closing Report
@@ -358,7 +495,7 @@ export const StoreProvider = ({ children }) => {
     const wsHost = window.location.hostname || 'localhost';
     fetch(`http://${wsHost}:5000/api/shifts/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
       body: JSON.stringify(report),
     })
       .then((res) => res.json())
@@ -435,7 +572,7 @@ export const StoreProvider = ({ children }) => {
       const wsHost = window.location.hostname || 'localhost';
       fetch(`http://${wsHost}:5000/api/settings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
         body: JSON.stringify(newSettings),
       })
         .then((res) => res.json())
@@ -483,12 +620,20 @@ export const StoreProvider = ({ children }) => {
         setIsLanConnected(true);
         console.log('[LAN SYNC] Kết nối thành công mạng nội bộ:', wsUrl);
 
-        // Auto register this device
-        const savedName = localStorage.getItem('smartpos_cashier_name') || 'Máy Tính Thu Ngân';
+        // Authenticate this WS connection for manager-only messages
+        const mgrToken = sessionStorage.getItem('smartpos_manager_token');
+        if (mgrToken) {
+          socket.send(JSON.stringify({ type: 'AUTH_MANAGER', token: mgrToken }));
+        }
+        // Auto register this device (stable id + editable name, so bills
+        // stay attributable even if the device syncs later).
+        const savedName = localStorage.getItem('smartpos_device_name') || localStorage.getItem('smartpos_cashier_name') || 'Máy Tính Thu Ngân';
+        const savedId = localStorage.getItem('smartpos_device_id') || '';
         const isMobile = /mobile|iphone|android|ipad/i.test(navigator.userAgent);
         socket.send(
           JSON.stringify({
             type: 'REGISTER_DEVICE',
+            deviceId: savedId,
             deviceName: savedName,
             deviceType: isMobile ? 'phone' : 'computer',
           })
@@ -510,7 +655,6 @@ export const StoreProvider = ({ children }) => {
             if (p.taxSettings) setTaxSettings(p.taxSettings);
             if (p.shifts) setShiftsHistory(p.shifts);
             if (p.loyaltyCustomers) setLoyaltyCustomers(p.loyaltyCustomers);
-            if (p.managerPin) setManagerPin(p.managerPin);
           } else if (msg.type === 'PRODUCT_SAVED_ALERT' && msg.product) {
             playBeep();
             showToast(`Mặt hàng mới: ${msg.product.name} (${msg.product.price.toLocaleString()}đ)`, 'success');
@@ -573,10 +717,6 @@ export const StoreProvider = ({ children }) => {
             setLoyaltyCustomers(d.loyaltyCustomers);
             localStorage.setItem('smartpos_loyalty_customers', JSON.stringify(d.loyaltyCustomers));
           }
-          if (d.managerPin) {
-            setManagerPin(d.managerPin);
-            localStorage.setItem('smartpos_manager_pin', d.managerPin);
-          }
         }
       })
       .catch(() => {});
@@ -620,13 +760,13 @@ export const StoreProvider = ({ children }) => {
       const wsHost = window.location.hostname || 'localhost';
       fetch(`http://${wsHost}:5000/api/backups/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
         body: JSON.stringify({ label }),
       }).catch(() => {});
 
       return newSnapshot;
     },
-    [products, orders, purchases, suppliers, taxSettings, debts, shiftsHistory, loyaltyCustomers]
+    [products, orders, purchases, suppliers, taxSettings, debts, shiftsHistory, loyaltyCustomers, managerAuthHeaders]
   );
 
   // Check every 60s for auto-backup interval
@@ -643,6 +783,31 @@ export const StoreProvider = ({ children }) => {
 
     return () => clearInterval(timer);
   }, [autoBackupIntervalHours, lastBackupTime, createBackupSnapshot, showToast]);
+
+  // Server backup download / restore (manager token required server-side).
+  const downloadServerBackup = async (filename) => {
+    const wsHost = window.location.hostname || 'localhost';
+    const res = await fetch(`http://${wsHost}:5000/api/backups/${encodeURIComponent(filename)}/download`, { headers: { ...managerAuthHeaders() } });
+    if (!res.ok) { showToast('Không tải được bản sao lưu (cần quyền chủ tiệm).', 'danger'); return false; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  };
+  const restoreServerBackup = async (filename) => {
+    const wsHost = window.location.hostname || 'localhost';
+    const res = await fetch(`http://${wsHost}:5000/api/backups/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+      body: JSON.stringify({ filename }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) { showToast(data.error || 'Khôi phục thất bại.', 'danger'); return false; }
+    showToast('Đã khôi phục từ bản sao lưu trên server!', 'success');
+    return true;
+  };
 
   // Restore snapshot
   const restoreBackupSnapshot = (snapshotId) => {
@@ -688,6 +853,20 @@ export const StoreProvider = ({ children }) => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  // Lookup a product by barcode: server first, then local products.
+  const lookupProductByBarcode = useCallback(async (barcode) => {
+    const code = String(barcode || '').trim();
+    if (!code) return { found: false, barcode: code };
+    const wsHost = window.location.hostname || 'localhost';
+    try {
+      const res = await fetch(`http://${wsHost}:5000/api/products/by-barcode/${encodeURIComponent(code)}`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.found && data.product) return { found: true, product: data.product };
+    } catch { /* fall through to local lookup */ }
+    const local = products.find((p) => p.barcode === code);
+    return local ? { found: true, product: local } : { found: false, barcode: code };
+  }, [products]);
+
   // Trigger Scanner Modal
   const openScanner = (target = 'pos', callback = null) => {
     setScannerTarget(target);
@@ -720,7 +899,9 @@ export const StoreProvider = ({ children }) => {
         addToCart(foundProduct, 1);
         showToast(`Đã thêm: ${foundProduct.name} (+1)`, 'success');
       } else {
-        showToast(`Mã vạch mới: ${barcode}`, 'info');
+        // Never silently create a product from POS. Point the user to Import.
+        sessionStorage.setItem('smartpos_import_prefill_barcode', barcode);
+        showToast(`Mã mới ${barcode} chưa có trong kho — mở mục Nhập Hàng để tạo nhanh sản phẩm này.`, 'warning');
       }
     }
 
@@ -832,103 +1013,103 @@ export const StoreProvider = ({ children }) => {
   const netTotal = Math.round(discountedSubtotal - totalVat);
   const cartGrandTotal = discountedSubtotal;
 
-  // Checkout and Create Sales Invoice (with Loyalty Points Earned)
-  const checkoutOrder = ({ paymentMethod, receivedAmount = 0, debtNote = '', customerName = '' }) => {
+  // Checkout: the server assigns the order code and recalculates totals.
+  // This function is async and returns the SERVER order (or null on failure).
+  // The cart is only cleared after the server confirms the order.
+  const checkoutOrder = async ({ paymentMethod, receivedAmount = 0, debtNote = '', customerName = '' }) => {
     if (cart.length === 0) {
       showToast('Giỏ hàng đang trống!', 'warning');
       return null;
     }
+    if (checkoutProcessing) return null;
+    setCheckoutProcessing(true);
+    try {
+      return await checkoutOrderInner({ paymentMethod, receivedAmount, debtNote, customerName });
+    } finally {
+      setCheckoutProcessing(false);
+    }
+  };
 
-    const orderId = `HD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(
-      orders.length + 1
-    ).padStart(3, '0')}`;
-
+  const checkoutOrderInner = async ({ paymentMethod, receivedAmount = 0, debtNote = '', customerName = '' }) => {
     const buyerName = customerName || customer.name || (paymentMethod === 'debt' ? 'Khách nợ' : 'Khách lẻ');
-
-    const newOrder = {
-      id: orderId,
-      createdAt: new Date().toISOString(),
-      customerName: buyerName,
-      customerPhone: customer.phone || '',
-      customerTaxId: customer.taxId || '',
-      items: cart.map((item) => ({
-        ...item,
-        total: item.price * item.qty,
-      })),
-      subtotal: cartSubtotal,
-      discount: discountAmount,
-      vat8Amount: Math.round(vat8Amount),
-      vat10Amount: Math.round(vat10Amount),
-      totalVat,
-      netTotal,
-      total: cartGrandTotal,
-      totalCost,
-      profit: Math.round(cartGrandTotal - totalCost),
-      paymentMethod,
-      paymentStatus: paymentMethod === 'debt' ? 'debt' : 'paid',
-      receivedAmount: paymentMethod === 'debt' ? 0 : Number(receivedAmount) || cartGrandTotal,
-      changeAmount: paymentMethod === 'debt' ? 0 : Math.max(0, (Number(receivedAmount) || cartGrandTotal) - cartGrandTotal),
+    const wsHost = window.location.hostname || 'localhost';
+    const cashierDevice = localStorage.getItem('smartpos_device_name') || localStorage.getItem('smartpos_cashier_name') || 'Thiết bị POS';
+    const cashierDeviceId = localStorage.getItem('smartpos_device_id') || '';
+    const payload = {
+      order: {
+        customerName: buyerName,
+        customerPhone: customer.phone || '',
+        customerTaxId: customer.taxId || '',
+        items: cart.map((item) => ({
+          productId: item.productId,
+          barcode: item.barcode,
+          name: item.name,
+          unit: item.unit,
+          unitName: item.unitName,
+          unitMultiplier: item.unitMultiplier || 1,
+          qty: item.qty,
+          vatRate: item.vatRate || 8,
+          costPrice: item.costPrice || 0,
+        })),
+        discount: discountAmount,
+        paymentMethod,
+        receivedAmount: paymentMethod === 'debt' ? 0 : Number(receivedAmount) || cartGrandTotal,
+        debtNote,
+      },
+      deviceName: cashierDevice,
+      deviceId: cashierDeviceId,
     };
-
-    // Automatically add loyalty points: 10,000đ = 1 Point
+    let serverOrder = null;
+    try {
+      const res = await fetch(`http://${wsHost}:5000/api/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        showToast(data.error || 'Không lưu được đơn hàng. Giỏ hàng vẫn giữ nguyên.', 'danger');
+        return null;
+      }
+      serverOrder = data.order;
+      if (data.data) {
+        if (data.data.products) setProducts(data.data.products);
+        if (data.data.orders) setOrders(data.data.orders);
+        if (data.data.debts) setDebts(data.data.debts);
+      }
+    } catch {
+      showToast('Không kết nối được server. Giỏ hàng vẫn giữ nguyên, thử lại sau.', 'danger');
+      return null;
+    }
+    // Loyalty points are awarded only after the server confirms the order.
     if (buyerName && buyerName !== 'Khách lẻ') {
-      const earnedPoints = Math.floor(cartGrandTotal / 10000);
+      const earnedPoints = Math.floor(serverOrder.total / 10000);
       if (earnedPoints > 0) {
         saveLoyaltyCustomer({
           customer: { name: buyerName, phoneLast4: customer.phone ? customer.phone.slice(-4) : '' },
           pointsChange: earnedPoints,
-          spentAmount: cartGrandTotal,
+          spentAmount: serverOrder.total,
         });
       }
     }
-
-    const wsHost = window.location.hostname || 'localhost';
-    const cashierDevice = localStorage.getItem('smartpos_cashier_name') || 'Thiết bị POS';
-
-    fetch(`http://${wsHost}:5000/api/order`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order: newOrder, deviceName: cashierDevice }),
-    })
-      .then((res) => res.json())
-      .then((res) => {
-        if (res.success && res.data) {
-          if (res.data.products) setProducts(res.data.products);
-          if (res.data.orders) setOrders(res.data.orders);
-          if (res.data.debts) setDebts(res.data.debts);
-        }
-      })
-      .catch(() => {
-        const updatedProducts = products.map((prod) => {
-          const cartItem = cart.find((item) => item.productId === prod.id);
-          if (cartItem) {
-            const qtyToDeduct = cartItem.qty * (cartItem.unitMultiplier || 1);
-            return { ...prod, stock: Math.max(0, prod.stock - qtyToDeduct) };
-          }
-          return prod;
-        });
-        setProducts(updatedProducts);
-        setOrders([newOrder, ...orders]);
-      });
-
     clearCart();
-
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
-
-    showToast(`Đã lưu đơn hàng ${orderId} (${new Intl.NumberFormat('vi-VN').format(cartGrandTotal)} đ)`, 'success');
-    return newOrder;
+    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+    const statusNote = serverOrder.paymentStatus === 'pending_vietqr' ? ' (chờ xác nhận VietQR)' : '';
+    showToast(`Đã lưu đơn hàng ${serverOrder.code} (${new Intl.NumberFormat('vi-VN').format(serverOrder.total)} đ)${statusNote}`, 'success');
+    setPaymentSuccessOrder(serverOrder);
+    setTimeout(() => setPaymentSuccessOrder(null), 2600);
+    return serverOrder;
   };
 
   // Product CRUD
   const addProduct = (prodData) => {
     const newProduct = {
       ...prodData,
-      id: `PRD-${Date.now()}`,
-      barcode: prodData.barcode || `${Math.floor(1000000000000 + Math.random() * 9000000000000)}`,
+      // No invented id/barcode here: the server assigns SP-xxxx on save.
+      // The optimistic local copy keeps a temporary id until the server
+      // response arrives; its barcode stays exactly what the user typed.
+      id: prodData.id || `TMP-${Date.now()}`,
+      barcode: prodData.barcode || '',
       costPrice: Number(prodData.costPrice) || 0,
       price: Number(prodData.price) || 0,
       stock: Number(prodData.stock) || 0,
@@ -940,9 +1121,16 @@ export const StoreProvider = ({ children }) => {
     const wsHost = window.location.hostname || 'localhost';
     fetch(`http://${wsHost}:5000/api/products/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
       body: JSON.stringify(newProduct),
-    }).catch(() => {});
+    })
+      .then((res) => res.json().catch(() => ({})))
+      .then((data) => {
+        if (data.product) {
+          setProducts((prev) => prev.map((p) => (p.id === newProduct.id ? data.product : p)));
+        }
+      })
+      .catch(() => {});
 
     const updated = [newProduct, ...products];
     setProducts(updated);
@@ -957,7 +1145,7 @@ export const StoreProvider = ({ children }) => {
     const wsHost = window.location.hostname || 'localhost';
     fetch(`http://${wsHost}:5000/api/products/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
       body: JSON.stringify(merged),
     }).catch(() => {});
 
@@ -972,6 +1160,30 @@ export const StoreProvider = ({ children }) => {
     setProducts(updated);
     broadcastLanUpdate({ products: updated, orders, purchases, suppliers, taxSettings, debts });
     showToast('Đã xóa sản phẩm khỏi kho!', 'info');
+  };
+
+  // Import stock: adds base-unit quantities to products and records a purchase.
+  // (Previously referenced by ImportStockScreen but never implemented.)
+  const importStock = ({ supplierId, items, notes }) => {
+    if (!items || items.length === 0) return null;
+    const purchase = {
+      id: `PN-${Date.now()}`,
+      supplierId,
+      items,
+      notes: notes || '',
+      createdAt: new Date().toISOString(),
+      total: items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.costPrice) || 0), 0),
+    };
+    const updatedProducts = products.map((prod) => {
+      const item = items.find((it) => it.productId === prod.id);
+      if (!item) return prod;
+      return { ...prod, stock: (Number(prod.stock) || 0) + (Number(item.qty) || 0) };
+    });
+    setProducts(updatedProducts);
+    setPurchases((prev) => [purchase, ...prev]);
+    broadcastLanUpdate({ products: updatedProducts, purchases: [purchase, ...purchases], orders, suppliers, taxSettings, debts });
+    showToast('Đã nhập hàng vào kho!', 'success');
+    return purchase;
   };
 
   // Supplier CRUD
@@ -1023,6 +1235,11 @@ export const StoreProvider = ({ children }) => {
         toggleTheme,
         activeTab,
         setActiveTab,
+        appMode,
+        setAppMode,
+        requestAppMode,
+        isElderMode,
+        isAdminMode,
         isLanConnected,
         lanIp,
         connectedDevicesList,
@@ -1030,7 +1247,9 @@ export const StoreProvider = ({ children }) => {
         setDevicesModalOpen,
         managementMenuOpen,
         setManagementMenuOpen,
-        managerPin,
+        managerToken,
+        getManagerToken,
+        managerAuthHeaders,
         isPinUnlocked,
         requireManagerPin,
         unlockManagerPin,
@@ -1088,6 +1307,15 @@ export const StoreProvider = ({ children }) => {
         netTotal,
         cartGrandTotal,
         checkoutOrder,
+        checkoutProcessing,
+        paymentSuccessOrder,
+        deviceId,
+        deviceName,
+        setDeviceName,
+        lookupProductByBarcode,
+        importStock,
+        downloadServerBackup,
+        restoreServerBackup,
         resetToSampleData,
         scannerOpen,
         scannerTarget,

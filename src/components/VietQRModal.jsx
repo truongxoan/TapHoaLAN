@@ -18,8 +18,9 @@ export const VietQRModal = () => {
     setVietQrData,
     taxSettings,
     showToast,
-    checkoutOrder,
     setActiveInvoice,
+    managerAuthHeaders,
+    setPinModalOpen,
   } = useStore();
 
   const [copiedAccount, setCopiedAccount] = useState(false);
@@ -27,7 +28,9 @@ export const VietQRModal = () => {
 
   if (!vietQrData) return null;
 
-  const { orderDraft, amount, orderId } = vietQrData;
+  const { amount, orderId, orderDbId } = vietQrData;
+  // orderId is the server order code (HD-YYYYMMDD-0001). The transfer
+  // content must match it exactly so the seller can reconcile by hand.
 
   // Format currency
   const formatVND = (val) => new Intl.NumberFormat('vi-VN').format(val) + ' đ';
@@ -52,15 +55,33 @@ export const VietQRModal = () => {
     }
   };
 
-  const handleConfirmPayment = () => {
-    // Finalize order checkout as VietQR
-    const completedOrder = checkoutOrder({
-      paymentMethod: 'vietqr',
-      receivedAmount: amount,
-    });
-    setVietQrData(null);
-    if (completedOrder) {
-      setActiveInvoice(completedOrder);
+  const handleConfirmPayment = async () => {
+    // Manual verification only: there is NO automatic bank webhook.
+    // The seller must first check their bank app: amount == total and
+    // transfer content == order code. Only a manager token may confirm.
+    const wsHost = window.location.hostname || 'localhost';
+    const targetId = orderDbId || orderId;
+    try {
+      const res = await fetch(`http://${wsHost}:5000/api/orders/${encodeURIComponent(targetId)}/confirm-vietqr`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+        body: JSON.stringify({ amount, code: orderId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        if (res.status === 401) {
+          showToast('Cần mở khóa quyền chủ tiệm để xác nhận VietQR.', 'danger');
+          setPinModalOpen(true);
+        } else {
+          showToast(data.error || 'Xác nhận VietQR thất bại.', 'danger');
+        }
+        return;
+      }
+      setVietQrData(null);
+      setActiveInvoice(data.order);
+      showToast(`Đã xác nhận VietQR cho đơn ${orderId}.`, 'success');
+    } catch {
+      showToast('Không kết nối được server để xác nhận VietQR.', 'danger');
     }
   };
 
@@ -232,6 +253,13 @@ export const VietQRModal = () => {
           </div>
         </div>
 
+        <div style={{ background: 'var(--warning-light, #fff7e6)', border: '1px solid var(--warning-border, #f59e0b)', borderRadius: '8px', padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.8rem', margin: '0 1.25rem 1rem' }}>
+          <strong>⚠️ Xác minh thủ công — chưa có đối soát ngân hàng tự động.</strong>
+          <div style={{ marginTop: '0.25rem' }}>
+            Trước khi bấm xác nhận, hãy mở app ngân hàng và kiểm tra: số tiền đúng {formatVND(amount)} và nội dung chuyển khoản đúng mã đơn {orderId}. Chỉ bấm xác nhận khi tiền đã về tài khoản.
+          </div>
+        </div>
+
         <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
           <button
             className="btn btn-secondary"
@@ -245,7 +273,7 @@ export const VietQRModal = () => {
             onClick={handleConfirmPayment}
           >
             <CheckCircle2 size={18} />
-            <span>Xác Nhận Đã Nhận Tiền</span>
+            <span>Đã Kiểm Tra App Ngân Hàng — Xác Nhận Đã Nhận Tiền</span>
           </button>
         </div>
       </div>

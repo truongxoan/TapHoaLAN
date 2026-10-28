@@ -13,6 +13,7 @@ import { VietQRModal } from './components/VietQRModal';
 import { PrintInvoiceModal } from './components/PrintInvoiceModal';
 import { ToastContainer } from './components/ToastContainer';
 import { POSScreen } from './screens/POSScreen';
+import { ElderPOSScreen } from './screens/ElderPOSScreen';
 import { MobilePOSScreen } from './screens/MobilePOSScreen';
 import { ImportStockScreen } from './screens/ImportStockScreen';
 import { InventoryScreen } from './screens/InventoryScreen';
@@ -20,14 +21,17 @@ import { DebtScreen } from './screens/DebtScreen';
 import { InvoicesTaxScreen } from './screens/InvoicesTaxScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { DeviceHistoryScreen } from './screens/DeviceHistoryScreen';
 
 const MainApp = () => {
-  const { activeTab } = useStore();
+  const { activeTab, appMode, paymentSuccessOrder } = useStore();
 
   const renderActiveScreen = () => {
     switch (activeTab) {
       case 'pos':
-        return <POSScreen />;
+        // Elder mode replaces only the selling screen; every other tab
+        // keeps the existing screen (scaled up by the elder CSS).
+        return appMode === 'elder' ? <ElderPOSScreen /> : <POSScreen />;
       case 'mobile_pos':
         return <MobilePOSScreen />;
       case 'import':
@@ -42,6 +46,11 @@ const MainApp = () => {
         return <ReportsScreen />;
       case 'settings':
         return <SettingsScreen />;
+      case 'devices':
+        // Deliberately NOT a direct tab in elder mode: the navbar only
+        // offers it in admin mode, and the screen itself still gates on
+        // the manager PIN, so a non-admin session only ever sees the lock.
+        return <DeviceHistoryScreen />;
       default:
         return <POSScreen />;
     }
@@ -56,6 +65,19 @@ const MainApp = () => {
       <main className="main-content">
         {renderActiveScreen()}
       </main>
+
+      {/* Payment success pop: only after the server confirms the order */}
+      {paymentSuccessOrder && (
+        <div className="payment-success-pop no-print" role="status" aria-live="polite">
+          <div className="payment-success-check">✓</div>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>Thanh toán xong!</div>
+            <div style={{ color: 'var(--text-muted)' }}>
+              Đơn {paymentSuccessOrder.code} · {new Intl.NumberFormat('vi-VN').format(paymentSuccessOrder.total)} đ · đã lưu về hệ thống chính
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Global Modals & Overlays */}
       <BarcodeScannerModal />

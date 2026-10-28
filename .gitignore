@@ -24,5 +24,8 @@ dist-ssr
 *.sw?
 *.apk
 android_apps/
-Cham
-Tuy
+data/
+backups/
+uploads/
+.env
+*.corrupt-*.json

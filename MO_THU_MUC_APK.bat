@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title THU MUC CHUA CAC FILE APK
 color 0A

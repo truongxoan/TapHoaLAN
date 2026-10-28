@@ -12,37 +12,37 @@ export const INITIAL_SUPPLIERS = [
   {
     id: 'SUP-001',
     name: 'NPP Nước Giải Khát & Bia Sài Gòn - Suntory Pepsi',
-    phone: '0903 888 999',
+    phone: '', // DEMO: số điện thoại mẫu đã được gỡ
     email: 'pepsico_dist@taphoa.vn',
     address: 'Kho Trung Chuyển KCN Tân Bình, TP.HCM',
-    taxId: '0309998877',
+    taxId: '', // DEMO
     debt: 0,
   },
   {
     id: 'SUP-002',
     name: 'Tổng Đại Lý Thực Phẩm Masan & Acecook Miền Nam',
-    phone: '0918 222 333',
+    phone: '', // DEMO: số điện thoại mẫu đã được gỡ
     email: 'masan_acecook@taphoa.vn',
     address: '48 Đại Lộ Bình Dương, Thuận An',
-    taxId: '0388776655',
+    taxId: '', // DEMO
     debt: 2500000,
   },
   {
     id: 'SUP-003',
     name: 'Đại Lý Hóa Mỹ Phẩm Unilever & P&G Việt Nam',
-    phone: '0988 555 444',
+    phone: '', // DEMO: số điện thoại mẫu đã được gỡ
     email: 'unilever_dist@taphoa.vn',
     address: '120 Quốc Lộ 1A, Bình Chánh, TP.HCM',
-    taxId: '0311223344',
+    taxId: '', // DEMO
     debt: 0,
   },
   {
     id: 'SUP-004',
     name: 'NPP Sữa Vinamilk & Sữa Đặc Cô Gái Hà Lan',
-    phone: '0977 111 222',
+    phone: '', // DEMO: số điện thoại mẫu đã được gỡ
     email: 'vinamilk_dist@taphoa.vn',
     address: '10 Đường Số 9, P. Tân Thuận, Quận 7',
-    taxId: '0300588569',
+    taxId: '', // DEMO
     debt: 1200000,
   },
 ];
@@ -290,7 +290,7 @@ export const INITIAL_ORDERS = [
     id: 'HD-20260822-001',
     createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
     customerName: 'Chị Lan (Bán cơm kế bên)',
-    customerPhone: '0987 654 321',
+    customerPhone: '', // DEMO
     customerTaxId: '',
     items: [
       {
@@ -364,16 +364,16 @@ export const INITIAL_PURCHASES = [
 ];
 
 export const INITIAL_TAX_SETTINGS = {
-  storeName: 'TẠP HÓA THỊNH PHÁT - BÁCH HÓA GIA ĐÌNH',
+  storeName: 'CHƯA CÀI ĐẶT',
   storeSlogan: 'Hàng Tiêu Dùng - Nước Giải Khát - Mì Gia Vị Giá Sỉ & Lẻ',
-  storeAddress: 'Số 128 Đường Lê Lợi, Phường 4, Quận Gò Vấp, TP. Hồ Chí Minh',
-  storePhone: '0908 123 456 - 028 3899 9999',
-  storeTaxId: '0318998822-001',
+  storeAddress: '',
+  storePhone: '',
+  storeTaxId: '',
   defaultVatRate: 8,
   priceIncludesTax: true,
-  bankName: 'Techcombank (Kỹ Thương) (TCB)',
-  bankId: 'TCB',
-  accountNo: '99999996789',
-  accountName: 'LUONG VAN TRUONG',
+  bankName: '',
+  bankId: '',
+  accountNo: '',
+  accountName: '',
   invoiceFooterNote: 'Cảm ơn quý khách đã mua sắm tại Tạp Hóa Thịnh Phát!',
 };

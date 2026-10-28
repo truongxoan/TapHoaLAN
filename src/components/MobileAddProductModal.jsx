@@ -188,7 +188,7 @@ export const MobileAddProductModal = () => {
 
     const payload = {
       name,
-      barcode: barcode || `${Math.floor(1000000000000 + Math.random() * 9000000000000)}`,
+      barcode: barcode || '', // Không tự sinh mã vạch giả; mã trống sẽ được server giữ nguyên
       category,
       unit,
       costPrice: Number(costPrice) || 0,

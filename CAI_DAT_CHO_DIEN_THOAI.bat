@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title CAI DAT TU DONG VAO DIEN THOAI ANDROID
 color 0B

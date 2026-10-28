@@ -47,8 +47,8 @@ export const ManagerPinModal = () => {
     setErrorMsg('');
   };
 
-  const verifyPin = (enteredPin) => {
-    const success = unlockManagerPin(enteredPin);
+  const verifyPin = async (enteredPin) => {
+    const success = await unlockManagerPin(enteredPin);
     if (success) {
       setPinInput('');
       setErrorMsg('');

@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Boxes,
   PackagePlus,
   BookOpen,
   Receipt,
   BarChart3,
+  Smartphone,
   Settings,
   Clock,
   Gift,
@@ -27,6 +28,7 @@ export const ManagementMenuModal = () => {
     requireManagerPin,
     lockManagerPin,
     setPinModalOpen,
+    updateManagerPin,
     setShiftModalOpen,
     setLoyaltyModalOpen,
     products,
@@ -38,6 +40,9 @@ export const ManagementMenuModal = () => {
     showToast,
   } = useStore();
 
+  const [oldPin, setOldPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [newPin2, setNewPin2] = useState('');
   if (!managementMenuOpen) return null;
 
   const handleSelectScreen = (screenId) => {
@@ -104,6 +109,14 @@ export const ManagementMenuModal = () => {
       icon: BarChart3,
       color: '#EC4899',
       bg: 'rgba(236, 72, 153, 0.12)',
+    },
+    {
+      id: 'devices',
+      title: 'Lịch Sử Thiết Bị & Sổ Ngày',
+      desc: 'Bill của từng máy trong tiệm, tổng kết ngày tự động và ghi chú ngày của chủ tiệm (cần PIN)',
+      icon: Smartphone,
+      color: '#0EA5E9',
+      bg: 'rgba(14, 165, 233, 0.12)',
     },
     {
       id: 'settings',
@@ -192,6 +205,27 @@ export const ManagementMenuModal = () => {
               </button>
             )}
           </div>
+
+          {isPinUnlocked && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (newPin !== newPin2) { showToast('Mã PIN mới nhập lại không khớp!', 'danger'); return; }
+                const ok = await updateManagerPin(oldPin, newPin);
+                if (ok) { setOldPin(''); setNewPin(''); setNewPin2(''); }
+              }}
+              style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem', marginBottom: '1rem' }}
+            >
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.5rem' }}>Đổi mã PIN chủ tiệm</div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input type="password" inputMode="numeric" maxLength={6} className="form-control" style={{ width: '110px' }} placeholder="PIN cũ" value={oldPin} onChange={(e) => setOldPin(e.target.value)} />
+                <input type="password" inputMode="numeric" maxLength={6} className="form-control" style={{ width: '110px' }} placeholder="PIN mới" value={newPin} onChange={(e) => setNewPin(e.target.value)} />
+                <input type="password" inputMode="numeric" maxLength={6} className="form-control" style={{ width: '110px' }} placeholder="Nhập lại PIN mới" value={newPin2} onChange={(e) => setNewPin2(e.target.value)} />
+                <button type="submit" className="btn btn-primary btn-sm">Đổi PIN</button>
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>PIN là 4–6 chữ số. Đổi ngay trong lần chạy đầu tiên; mã PIN không bao giờ hiển thị trong nhật ký.</div>
+            </form>
+          )}
 
           {/* Quick Actions Grid */}
           <div

@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title CAI DAT SMARTPOS TAP HOA LAN
 color 0B
@@ -30,7 +30,7 @@ echo ================================================================
 echo   ✅ CÀI ĐẶT HOÀN TẤT TRÊN MÁY TÍNH!
 echo ================================================================
 echo.
-echo 👉 Bây giờ bạn chỉ cần nhấp đúp vào file "2_CHAY_PHAN_MEM.bat"
+echo 👉 Bây giờ bạn chỉ cần nhấp đúp vào file "CHAY_PHAN_MEM_TAP_HOA.bat"
 echo    để bắt đầu bán hàng!
 echo.
 pause

@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title COPY FILE CAI DAT VAO DIEN THOAI
 color 0A

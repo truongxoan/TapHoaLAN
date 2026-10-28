@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title SMARTPOS TAP HOA GIA DINH - SERVER MANG LAN
 color 0A

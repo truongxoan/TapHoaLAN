@@ -161,7 +161,7 @@ export const InventoryScreen = () => {
       setEditingProduct(null);
       setFormData({
         name: '',
-        barcode: `${Math.floor(1000000000000 + Math.random() * 9000000000000)}`,
+        barcode: '', // Mã vạch do người dùng nhập hoặc quét; không tự sinh mã giả
         category: 'instant_food',
         unit: 'Gói',
         costPrice: '',

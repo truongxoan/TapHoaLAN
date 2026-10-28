@@ -1,17 +1,17 @@
 {
   "taxSettings": {
-    "storeName": "TẠP HÓA THỊNH PHÁT - BÁCH HÓA GIA ĐÌNH",
-    "storeSlogan": "Hàng Tiêu Dùng - Nước Giải Khát - Mì Gia Vị Giá Sỉ & Lẻ",
-    "storeAddress": "Số 128 Đường Lê Lợi, Phường 4, Quận Gò Vấp, TP. Hồ Chí Minh",
-    "storePhone": "0908 123 456 - 028 3899 9999",
-    "storeTaxId": "0318998822-001",
+    "storeName": "CHƯA CÀI ĐẶT",
+    "storeSlogan": "",
+    "storeAddress": "",
+    "storePhone": "",
+    "storeTaxId": "",
     "defaultVatRate": 8,
     "priceIncludesTax": true,
-    "bankName": "Techcombank (Kỹ Thương) (TCB)",
-    "bankId": "TCB",
-    "accountNo": "99999996789",
-    "accountName": "LUONG VAN TRUONG",
-    "invoiceFooterNote": "Cảm ơn quý khách đã mua sắm tại Tạp Hóa Thịnh Phát!"
+    "bankName": "",
+    "bankId": "",
+    "accountNo": "",
+    "accountName": "",
+    "invoiceFooterNote": ""
   },
   "products": [],
   "orders": [],
