@@ -143,3 +143,12 @@ tải bản mới nhất từ GitHub, chỉ chép đè code mới (không xóa d
 chạy `npm install` + `npm run build` rồi khởi động lại server.
 An toàn: nếu GitHub chưa có bản mới (thiếu màn Lịch sử thiết bị / màn Người lớn tuổi),
 file sẽ dừng lại và KHÔNG chép đè gì cả.
+
+## Chạy nhanh từ GitHub, không cần tải tay cả dự án
+
+Nhấp đúp `CHAY_TU_XA.bat` (sau khi file này đã có trên GitHub).
+File này tự lấy code mới nhất từ GitHub về thư mục tạm `%TEMP%\TapHoaLAN-chay-nhanh`,
+chỉ lấy các file chạy phần mềm (bỏ qua thư mục Android), rồi chạy `npm install`,
+`npm run build` và khởi động server tại `http://localhost:5000`.
+Lưu ý: đây là bản chạy thử nhanh, dữ liệu lưu trong thư mục tạm, không phải
+dữ liệu tiệm thật. Muốn dùng dữ liệu tiệm thật, dùng `CAP_NHAT_TU_GITHUB.bat`.
