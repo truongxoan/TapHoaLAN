@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title CHAY NHANH TAP HOA TU GITHUB - KHONG CAN TAI TAY CA DU AN
 setlocal
@@ -39,10 +39,12 @@ echo [1/4] Dang cap nhat code bang Git...
 cd /d "%WORKDIR%"
 git pull --ff-only origin main
 if errorlevel 1 goto GITCLONE_FRESH
+git sparse-checkout set --no-cone server.js server-lib.js package.json package-lock.json src index.html vite.config.js public
+if errorlevel 1 goto GITCLONE_FRESH
 goto BUILD
 
 :GITCLONE_FRESH
-echo [CANH BAO] Khong pull duoc, se xoa thu muc tam va tai lai tu dau.
+echo [CANH BAO] Khong cap nhat duoc, se xoa thu muc tam va tai lai tu dau.
 cd /d "%TEMP%"
 rmdir /S /Q "%WORKDIR%"
 goto GITCLONE
@@ -52,7 +54,7 @@ echo [1/4] Dang lay code bang Git (chi lay file chay, khong lay Android)...
 git clone --depth 1 --filter=blob:none --sparse https://github.com/truongxoan/TapHoaLAN.git "%WORKDIR%"
 if errorlevel 1 goto FAIL_CLONE
 cd /d "%WORKDIR%"
-git sparse-checkout set server.js server-lib.js package.json package-lock.json src index.html vite.config.js public
+git sparse-checkout set --no-cone server.js server-lib.js package.json package-lock.json src index.html vite.config.js public
 if errorlevel 1 goto FAIL_SPARSE
 goto BUILD
 
@@ -78,6 +80,7 @@ cd /d "%WORKDIR%"
 goto BUILD
 
 :BUILD
+if not exist "src\main.jsx" goto FAIL_SRC
 echo.
 echo [2/4] Dang cai thu vien...
 call npm install
@@ -117,6 +120,13 @@ exit /b 1
 
 :FAIL_ZIP
 echo [LOI] File tai ve thieu server.js. Hay chay lai file nay.
+pause
+exit /b 1
+
+:FAIL_SRC
+echo [LOI] Thieu thu muc src, code tai ve chua du.
+echo Hay xoa thu muc tam roi chay lai file nay:
+echo rmdir /S /Q "%TEMP%\TapHoaLAN-chay-nhanh"
 pause
 exit /b 1
 
