@@ -288,6 +288,72 @@ export function computeDailySummary(orders, date) {
   };
 }
 
+export const BACKUP_INTERVAL_MINUTES_OPTIONS = [0, 15, 30, 60, 180, 360, 720, 1440];
+export const BACKUP_MAX_BACKUPS_OPTIONS = [12, 24, 48, 96];
+export const DEFAULT_BACKUP_SETTINGS = { enabled: true, intervalMinutes: 60, maxBackups: 24, mirrorDir: '' };
+
+export function isAbsolutePath(p) {
+  if (typeof p !== 'string') return false;
+  if (p.startsWith('/')) return true;
+  if (/^[A-Za-z]:[\\/]/.test(p)) return true;
+  if (p.startsWith('\\\\')) return true;
+  return false;
+}
+
+// Mirror must not live inside the main backups folder, or every mirror
+// copy would be seen as a new backup and could loop.
+export function isMirrorDirSafe(mirrorDir, backupsDir) {
+  if (!mirrorDir) return true;
+  if (!isAbsolutePath(mirrorDir)) return false;
+  if (!backupsDir) return true;
+  const norm = (s) => s.replace(/\\/g, '/').replace(/\/+$/, '');
+  const m = norm(mirrorDir);
+  const b = norm(backupsDir);
+  if (m === b) return false;
+  if (m.startsWith(b + '/')) return false;
+  return true;
+}
+
+export function ensureBackupSettings(db) {
+  const raw = db && typeof db === 'object' && db.backupSettings && typeof db.backupSettings === 'object' && !Array.isArray(db.backupSettings)
+    ? db.backupSettings : {};
+  const settings = {
+    enabled: raw.enabled !== undefined ? Boolean(raw.enabled) : DEFAULT_BACKUP_SETTINGS.enabled,
+    intervalMinutes: BACKUP_INTERVAL_MINUTES_OPTIONS.includes(Number(raw.intervalMinutes))
+      ? Number(raw.intervalMinutes) : DEFAULT_BACKUP_SETTINGS.intervalMinutes,
+    maxBackups: BACKUP_MAX_BACKUPS_OPTIONS.includes(Number(raw.maxBackups))
+      ? Number(raw.maxBackups) : DEFAULT_BACKUP_SETTINGS.maxBackups,
+    mirrorDir: typeof raw.mirrorDir === 'string' ? raw.mirrorDir.trim() : '',
+  };
+  if (db && typeof db === 'object') db.backupSettings = settings;
+  return settings;
+}
+
+// Validate a client-supplied backup settings object. Returns
+// { settings, errors }; settings is null when validation fails.
+export function validateBackupSettings(input, backupsDir) {
+  const errors = [];
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return { settings: null, errors: ['Cấu hình sao lưu không hợp lệ'] };
+  }
+  const enabled = input.enabled !== undefined ? Boolean(input.enabled) : true;
+  const intervalMinutes = Number(input.intervalMinutes);
+  if (!BACKUP_INTERVAL_MINUTES_OPTIONS.includes(intervalMinutes)) {
+    errors.push('Chu kỳ sao lưu không hợp lệ (chọn 0 để tắt, hoặc 15/30/60/180/360/720/1440 phút)');
+  }
+  const maxBackups = Number(input.maxBackups);
+  if (!BACKUP_MAX_BACKUPS_OPTIONS.includes(maxBackups)) {
+    errors.push('Số bản sao lưu giữ lại không hợp lệ (chọn 12/24/48/96)');
+  }
+  const mirrorDir = typeof input.mirrorDir === 'string' ? input.mirrorDir.trim() : '';
+  if (mirrorDir) {
+    if (!isAbsolutePath(mirrorDir)) errors.push('Thư mục dự phòng phải là đường dẫn tuyệt đối (ví dụ D:\\SaoLuu hoặc /mnt/usb/saoluu)');
+    else if (!isMirrorDirSafe(mirrorDir, backupsDir)) errors.push('Thư mục dự phòng không được nằm trong thư mục sao lưu chính');
+  }
+  if (errors.length) return { settings: null, errors };
+  return { settings: { enabled, intervalMinutes, maxBackups, mirrorDir }, errors: [] };
+}
+
 export function sanitizeDb(db) {
   if (!db || typeof db !== 'object') return db;
   const { managerPin, managerPinHash, ...rest } = db;

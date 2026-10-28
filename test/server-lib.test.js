@@ -23,6 +23,9 @@ import {
   computeDailySummary,
   isValidDailyDate,
   vnDateString,
+  ensureBackupSettings,
+  validateBackupSettings,
+  isAbsolutePath,
 } from '../server-lib.js';
 
 test('sequential order codes increment same-day and reset next day', () => {
@@ -194,4 +197,24 @@ test('daily summary is computed from orders for the Vietnam date only', () => {
   assert.deepEqual(s.orderCodes, ['HD-20261028-0001', 'HD-20261028-0002']);
   assert.equal(isValidDailyDate('2026-10-28'), true);
   assert.equal(isValidDailyDate('28/10/2026'), false);
+});
+
+test('backup settings migrate old DBs and validate intervals, max and mirror', () => {
+  const old = {};
+  const s = ensureBackupSettings(old);
+  assert.deepEqual(s, { enabled: true, intervalMinutes: 60, maxBackups: 24, mirrorDir: '' });
+  assert.equal(ensureBackupSettings({ backupSettings: { intervalMinutes: 999, maxBackups: 999 } }).intervalMinutes, 60);
+  assert.equal(ensureBackupSettings({ backupSettings: { intervalMinutes: 30, maxBackups: 48 } }).maxBackups, 48);
+  const ok = validateBackupSettings({ enabled: true, intervalMinutes: 30, maxBackups: 48, mirrorDir: 'D:\\SaoLuuTapHoa' }, 'C:\\TapHoaLAN\\backups');
+  assert.equal(ok.errors.length, 0);
+  assert.equal(ok.settings.intervalMinutes, 30);
+  const disabled = validateBackupSettings({ enabled: false, intervalMinutes: 0, maxBackups: 12, mirrorDir: '' }, '/app/backups');
+  assert.equal(disabled.errors.length, 0);
+  assert.equal(validateBackupSettings({ intervalMinutes: 45, maxBackups: 24 }, '/app/backups').settings, null);
+  assert.equal(validateBackupSettings({ intervalMinutes: 60, maxBackups: 100 }, '/app/backups').settings, null);
+  assert.equal(validateBackupSettings({ intervalMinutes: 60, maxBackups: 24, mirrorDir: 'relative/path' }, '/app/backups').settings, null);
+  assert.equal(validateBackupSettings({ intervalMinutes: 60, maxBackups: 24, mirrorDir: '/app/backups/sub' }, '/app/backups').settings, null);
+  assert.equal(isAbsolutePath('/mnt/usb/saoluu'), true);
+  assert.equal(isAbsolutePath('D:\\SaoLuu'), true);
+  assert.equal(isAbsolutePath('SaoLuu'), false);
 });

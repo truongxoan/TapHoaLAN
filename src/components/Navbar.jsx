@@ -23,7 +23,8 @@ import { useStore } from '../context/StoreContext';
 export const Navbar = () => {
   const {
     theme,
-    toggleTheme,
+    THEMES,
+    cycleTheme,
     activeTab,
     setActiveTab,
     appMode,
@@ -337,14 +338,17 @@ export const Navbar = () => {
             <span>Quét ĐT</span>
           </button>
 
-          {/* Theme Switcher */}
+          {/* Quick theme switcher: cycles through all themes. Full picker
+              with live preview is in Settings. Theme never touches appMode,
+              PIN state, or data. */}
           <button
-            className="btn btn-secondary btn-icon"
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Chuyển sang Chế độ Sáng' : 'Chuyển sang Chế độ Tối'}
-            aria-label="Toggle Theme"
+            className="btn btn-secondary btn-sm"
+            onClick={cycleTheme}
+            title={`Đang dùng theme: ${(THEMES || []).find((t) => t.id === theme)?.name || theme}. Bấm để đổi theme tiếp theo. Chọn đầy đủ trong Cài đặt.`}
+            aria-label="Đổi giao diện"
           >
-            {theme === 'dark' ? <Sun size={16} color="#FBBF24" /> : <Moon size={16} color="#4F46E5" />}
+            {theme === 'dark' ? <Sun size={16} color="#FBBF24" /> : <Moon size={16} color="var(--primary)" />}
+            <span>{(THEMES || []).find((t) => t.id === theme)?.name || 'Theme'}</span>
           </button>
         </div>
       </div>

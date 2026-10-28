@@ -87,9 +87,24 @@ const INITIAL_LOYALTY = [
   },
 ];
 
+export const THEMES = [
+  { id: 'dark', name: 'Tối', desc: 'Dịu mắt khi bán buổi tối, dùng nhiều nhất ở quầy.', swatch: '#6366F1' },
+  { id: 'light', name: 'Sáng', desc: 'Sáng, rõ ràng, hợp ban ngày và in ấn.', swatch: '#4338CA' },
+  { id: 'green', name: 'Xanh lá Tiệm', desc: 'Tươi mát như tiệm rau quả, nhẹ mắt cả ngày.', swatch: '#15803D' },
+  { id: 'blue', name: 'Xanh dương', desc: 'Chuyên nghiệp, bình tĩnh, dễ đọc giá và tổng tiền.', swatch: '#1D4ED8' },
+  { id: 'purple', name: 'Tím Hồng', desc: 'Mềm mại, nổi bật, hợp tiệm trẻ và tiệm quà.', swatch: '#9333EA' },
+  { id: 'contrast', name: 'Tương phản cao', desc: 'Chữ đen trên nền trắng, viền đậm, dành cho người mắt kém và chế độ người lớn tuổi.', swatch: '#000000' },
+];
+const isValidTheme = (t) => THEMES.some((x) => x.id === t);
+
 export const StoreProvider = ({ children }) => {
-  // Theme & Navigation
-  const [theme, setTheme] = useState(() => localStorage.getItem('smartpos_theme') || 'dark');
+  // Theme & Navigation (same localStorage key as before: smartpos_theme.
+  // Old values 'dark'/'light' still work; unknown values fall back to 'dark'.
+  // Theme is per-browser only and is never synced across LAN devices.)
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('smartpos_theme');
+    return isValidTheme(saved) ? saved : 'dark';
+  });
   const [activeTab, setActiveTab] = useState('pos');
 
   // Interface mode: 'elder' (large text, simplified) | 'young' (full
@@ -852,6 +867,14 @@ export const StoreProvider = ({ children }) => {
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
+  // Quick Navbar button: cycle through all themes in THEMES order.
+  // Changing theme never touches appMode, PIN state, or any data.
+  const cycleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const idx = THEMES.findIndex((t) => t.id === prev);
+      return THEMES[(idx + 1) % THEMES.length].id;
+    });
+  }, []);
 
   // Lookup a product by barcode: server first, then local products.
   const lookupProductByBarcode = useCallback(async (barcode) => {
@@ -1232,7 +1255,10 @@ export const StoreProvider = ({ children }) => {
     <StoreContext.Provider
       value={{
         theme,
+        setTheme,
+        THEMES,
         toggleTheme,
+        cycleTheme,
         activeTab,
         setActiveTab,
         appMode,

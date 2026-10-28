@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings,
   Store,
@@ -30,6 +30,10 @@ export const SettingsScreen = () => {
     appMode,
     requestAppMode,
     isPinUnlocked,
+    theme,
+    setTheme,
+    THEMES,
+    managerAuthHeaders,
     taxSettings,
     setTaxSettings,
     suppliers,
@@ -67,6 +71,93 @@ export const SettingsScreen = () => {
     taxId: '',
     debt: 0,
   });
+
+  // Server disk backup settings (admin-only, manager token required).
+  // This is the PRIMARY backup; the hourly snapshot section below is
+  // only a secondary local copy in this browser.
+  const BACKUP_INTERVAL_LABELS = {
+    0: 'Tắt tự động sao lưu',
+    15: '15 phút',
+    30: '30 phút',
+    60: '1 giờ',
+    180: '3 giờ',
+    360: '6 giờ',
+    720: '12 giờ',
+    1440: '24 giờ',
+  };
+  const [serverBackup, setServerBackup] = useState(null);
+  const [serverBackupForm, setServerBackupForm] = useState({ enabled: true, intervalMinutes: 60, maxBackups: 24, mirrorDir: '' });
+  const [serverBackupList, setServerBackupList] = useState([]);
+  const [serverBackupNote, setServerBackupNote] = useState('');
+  const serverHost = () => window.location.hostname || 'localhost';
+  const loadServerBackup = useCallback(async () => {
+    if (!isPinUnlocked) { setServerBackup(null); setServerBackupList([]); return; }
+    try {
+      const sRes = await fetch(`http://${serverHost()}:5000/api/backup-settings`, { headers: { ...managerAuthHeaders() } });
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        setServerBackup(sData);
+        if (sData.settings) setServerBackupForm(sData.settings);
+        if (sData.mirrorWarning) setServerBackupNote(sData.mirrorWarning);
+      }
+      const lRes = await fetch(`http://${serverHost()}:5000/api/backups`, { headers: { ...managerAuthHeaders() } });
+      if (lRes.ok) {
+        const lData = await lRes.json();
+        setServerBackupList(lData.backups || []);
+      }
+    } catch { /* server unreachable: Settings still renders */ }
+  }, [isPinUnlocked, managerAuthHeaders]);
+  useEffect(() => { loadServerBackup(); }, [loadServerBackup]);
+  const handleSaveServerBackup = async () => {
+    try {
+      const res = await fetch(`http://${serverHost()}:5000/api/backup-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+        body: JSON.stringify(serverBackupForm),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || 'Lưu cấu hình sao lưu thất bại!', 'danger'); return; }
+      showToast('Đã lưu cấu hình sao lưu máy chủ!', 'success');
+      loadServerBackup();
+    } catch { showToast('Không kết nối được máy chủ!', 'danger'); }
+  };
+  const handleServerBackupNow = async () => {
+    try {
+      const res = await fetch(`http://${serverHost()}:5000/api/backups/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+        body: JSON.stringify({ label: 'Sao lưu thủ công tại quầy' }),
+      });
+      if (!res.ok) { showToast('Tạo bản sao lưu máy chủ thất bại! Cần quyền chủ tiệm.', 'danger'); return; }
+      showToast('Đã tạo bản sao lưu máy chủ!', 'success');
+      loadServerBackup();
+    } catch { showToast('Không kết nối được máy chủ!', 'danger'); }
+  };
+  const handleServerRestore = async (filename) => {
+    if (!window.confirm(`Khôi phục dữ liệu từ bản sao lưu "${filename}"? Dữ liệu hiện tại sẽ được sao lưu trước rồi mới thay thế.`)) return;
+    try {
+      const res = await fetch(`http://${serverHost()}:5000/api/backups/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...managerAuthHeaders() },
+        body: JSON.stringify({ filename }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || 'Khôi phục thất bại!', 'danger'); return; }
+      showToast('Đã khôi phục từ bản sao lưu máy chủ! Tải lại trang để thấy dữ liệu mới.', 'success');
+      loadServerBackup();
+    } catch { showToast('Không kết nối được máy chủ!', 'danger'); }
+  };
+  const handleServerDownload = async (filename) => {
+    try {
+      const res = await fetch(`http://${serverHost()}:5000/api/backups/${encodeURIComponent(filename)}/download`, { headers: { ...managerAuthHeaders() } });
+      if (!res.ok) { showToast('Tải bản sao lưu thất bại!', 'danger'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch { showToast('Không kết nối được máy chủ!', 'danger'); }
+  };
 
   const handleSaveStoreSettings = (e) => {
     e.preventDefault();
@@ -227,6 +318,164 @@ export const SettingsScreen = () => {
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Theme picker with live preview — theme is per-browser only,
+          never synced across LAN devices, and never touches appMode/PIN/data. */}
+      <div className="card" style={{ marginBottom: '1.25rem' }}>
+        <div className="card-header">
+          <span style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+            <span>🎨 Giao Diện (Theme)</span>
+          </span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Đang dùng: {(THEMES || []).find((t) => t.id === theme)?.name || theme} • Chỉ đổi trên trình duyệt này
+          </span>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+            {(THEMES || []).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`theme-swatch ${theme === t.id ? 'active' : ''}`}
+                onClick={() => setTheme(t.id)}
+                aria-pressed={theme === t.id}
+              >
+                <span className="theme-swatch-dot" style={{ background: t.swatch }} />
+                <span>
+                  <span style={{ display: 'block', fontWeight: 800 }}>{t.name}{theme === t.id ? ' ✓' : ''}</span>
+                  <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="theme-preview" aria-hidden="true">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span style={{ fontWeight: 800 }}>Xem trước: thẻ hàng mẫu</span>
+              <span style={{ fontWeight: 900, fontSize: '1.25rem', color: 'var(--primary)' }}>Tổng tiền: 125.000 đ</span>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0.5rem 0' }}>
+              Đây là cách thẻ, nút và tổng tiền sẽ hiển thị với theme đang chọn. Nút đổi nhanh ở thanh trên cùng cũng đổi theo cùng một danh sách này.
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-primary btn-sm">Nút chính</button>
+              <button type="button" className="btn btn-secondary btn-sm">Nút phụ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Server disk backup & redundant mirror (admin-only) */}
+      <div className="card" style={{ marginBottom: '1.25rem', border: '2px solid var(--primary-border)' }}>
+        <div className="card-header">
+          <span style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+            <Database size={20} />
+            <span>Sao Lưu &amp; Dự Phòng (Máy Chủ)</span>
+          </span>
+          <button className="btn btn-primary btn-sm" onClick={handleServerBackupNow} disabled={!isPinUnlocked}>
+            <Database size={14} />
+            <span>Sao lưu ngay (máy chủ)</span>
+          </button>
+        </div>
+        <div className="card-body">
+          {!isPinUnlocked ? (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+              Cần mở khóa PIN chủ tiệm mới xem và đổi được cấu hình sao lưu máy chủ. Bấm nút Khóa Chủ Tiệm trên thanh trên cùng để nhập PIN.
+            </p>
+          ) : !serverBackup ? (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Đang tải cấu hình sao lưu máy chủ…</p>
+          ) : (
+            <>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 0 }}>
+                Đây là bản sao lưu CHÍNH trên máy chủ, khác với bản Snapshot ở dưới (Snapshot chỉ là bản phụ lưu trong trình duyệt này).
+                Lần sao lưu máy chủ gần nhất: {serverBackup.lastBackupAt ? new Date(serverBackup.lastBackupAt).toLocaleString('vi-VN') : 'Chưa có'}.
+              </p>
+              {serverBackupNote && (
+                <p style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 'var(--radius-md)', padding: '0.6rem 0.75rem', fontSize: '0.85rem' }}>
+                  ⚠️ {serverBackupNote} — bản chính vẫn an toàn, chỉ bản dự phòng bị bỏ qua.
+                </p>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem' }}>
+                  Tự động sao lưu
+                  <select
+                    className="form-control"
+                    style={{ marginTop: '0.25rem' }}
+                    value={serverBackupForm.enabled ? serverBackupForm.intervalMinutes : 0}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setServerBackupForm((f) => ({ ...f, enabled: v !== 0, intervalMinutes: v === 0 ? f.intervalMinutes : v }));
+                    }}
+                  >
+                    {Object.entries(BACKUP_INTERVAL_LABELS).map(([v, label]) => (
+                      <option key={v} value={v}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem' }}>
+                  Giữ lại tối đa
+                  <select
+                    className="form-control"
+                    style={{ marginTop: '0.25rem' }}
+                    value={serverBackupForm.maxBackups}
+                    onChange={(e) => setServerBackupForm((f) => ({ ...f, maxBackups: Number(e.target.value) }))}
+                  >
+                    <option value={12}>12 bản</option>
+                    <option value={24}>24 bản</option>
+                    <option value={48}>48 bản</option>
+                    <option value={96}>96 bản</option>
+                  </select>
+                </label>
+              </div>
+              <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                Thư mục dự phòng (tùy chọn, ví dụ ổ USB hoặc ổ khác)
+                <input
+                  className="form-control"
+                  style={{ marginTop: '0.25rem' }}
+                  value={serverBackupForm.mirrorDir}
+                  onChange={(e) => setServerBackupForm((f) => ({ ...f, mirrorDir: e.target.value }))}
+                  placeholder="Ví dụ: D:\SaoLuuTapHoa  (để trống nếu không dùng)"
+                />
+                <span style={{ display: 'block', fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                  Phải là đường dẫn tuyệt đối và thư mục phải tồn tại hoặc tạo được. Mỗi bản sao lưu mới sẽ được chép thêm sang đây, nếu chép lỗi thì bản chính vẫn an toàn và sẽ hiện cảnh báo ở trên. Không được chọn thư mục nằm trong thư mục sao lưu chính.
+                </span>
+              </label>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveServerBackup}>Lưu cấu hình sao lưu</button>
+              <div style={{ marginTop: '1rem' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  Các bản sao lưu máy chủ gần nhất ({serverBackupList.length})
+                </div>
+                {serverBackupList.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Chưa có bản sao lưu máy chủ nào. Bấm “Sao lưu ngay (máy chủ)” ở trên để tạo bản đầu tiên.</p>
+                ) : (
+                  <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)', textAlign: 'left' }}>
+                          <th style={{ padding: '0.5rem' }}>Tên file</th>
+                          <th style={{ padding: '0.5rem' }}>Thời gian</th>
+                          <th style={{ padding: '0.5rem', textAlign: 'right' }}>Tải / Khôi phục</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {serverBackupList.slice(0, 20).map((b) => (
+                          <tr key={b.filename} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '0.5rem', wordBreak: 'break-all' }}>{b.filename}</td>
+                            <td style={{ padding: '0.5rem' }}>{new Date(b.createdAt).toLocaleString('vi-VN')}</td>
+                            <td style={{ padding: '0.5rem', textAlign: 'right' }}>
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleServerDownload(b.filename)}>Tải</button>{' '}
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleServerRestore(b.filename)}>Khôi phục</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

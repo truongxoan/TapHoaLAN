@@ -29,6 +29,9 @@ import {
   sanitizeBackupFilename,
   detectImageType,
   isNonEmptyString,
+  ensureBackupSettings,
+  validateBackupSettings,
+  DEFAULT_BACKUP_SETTINGS,
 } from './server-lib.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -102,6 +105,7 @@ const DEFAULT_DATABASE = {
   loyaltyCustomers: [],
   devices: [],
   dailyNotes: {},
+  backupSettings: { ...DEFAULT_BACKUP_SETTINGS },
   counters: { orderSeqByDate: {}, productSeq: 0 },
 };
 
@@ -135,6 +139,7 @@ function readDatabase() {
       // and the daily ledger, so they migrate to empty collections.
       devices: Array.isArray(parsed.devices) ? parsed.devices : [],
       dailyNotes: parsed.dailyNotes && typeof parsed.dailyNotes === 'object' && !Array.isArray(parsed.dailyNotes) ? parsed.dailyNotes : {},
+      backupSettings: ensureBackupSettings({ backupSettings: parsed.backupSettings }),
     };
   } catch (err) {
     // Quarantine the corrupt file, never overwrite it with defaults.
@@ -234,17 +239,51 @@ app.use((req, res, next) => {
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // --- Backups ---
-const MAX_BACKUPS = 24;
-function rotateBackups() {
+// Server disk backups are the primary backup. Their interval and
+// retention are configurable (see /api/backup-settings) and persist in
+// the DB; the client-side snapshot interval in Settings is only a
+// secondary local copy in the browser, not a replacement for this.
+function getBackupSettings() {
+  try {
+    const db = readDatabase();
+    if (db) return ensureBackupSettings(db);
+  } catch { /* fall through to defaults */ }
+  return { ...DEFAULT_BACKUP_SETTINGS };
+}
+function rotateBackups(maxBackups) {
+  const max = Number(maxBackups) || DEFAULT_BACKUP_SETTINGS.maxBackups;
   try {
     const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith('.json'))
       .map((f) => ({ f, mtime: fs.statSync(path.join(BACKUPS_DIR, f)).mtimeMs }))
       .sort((a, b) => a.mtime - b.mtime);
-    while (files.length > MAX_BACKUPS) {
+    while (files.length > max) {
       const old = files.shift();
       fs.unlinkSync(path.join(BACKUPS_DIR, old.f));
     }
   } catch { /* best effort */ }
+}
+let lastMirrorWarning = '';
+let lastMirrorAt = '';
+// Redundant copy: best effort only. A missing/unwritable mirror must
+// never fail the main backup or an order, so all errors are swallowed
+// here and surfaced as a warning in backup settings instead.
+function mirrorBackupFile(filename) {
+  try {
+    const settings = getBackupSettings();
+    const mirrorDir = (settings.mirrorDir || '').trim();
+    if (!mirrorDir) return;
+    const pathMod = path;
+    const resolvedMirror = pathMod.resolve(mirrorDir);
+    const resolvedBackups = pathMod.resolve(BACKUPS_DIR);
+    if (resolvedMirror === resolvedBackups || resolvedMirror.startsWith(resolvedBackups + pathMod.sep)) return;
+    fs.mkdirSync(resolvedMirror, { recursive: true });
+    fs.copyFileSync(pathMod.join(BACKUPS_DIR, filename), pathMod.join(resolvedMirror, filename));
+    lastMirrorWarning = '';
+    lastMirrorAt = new Date().toISOString();
+  } catch (e) {
+    lastMirrorWarning = `Không sao chép được sang thư mục dự phòng: ${e.message}`;
+    console.error('[MIRROR-BACKUP]', lastMirrorWarning);
+  }
 }
 function createDiskBackup(data, label = 'Tự động sao lưu định kỳ') {
   const now = new Date();
@@ -252,16 +291,28 @@ function createDiskBackup(data, label = 'Tự động sao lưu định kỳ') {
   const filename = `backup_${stamp}.json`;
   const payload = { label, createdAt: now.toISOString(), sizeBytes: JSON.stringify(data).length, data: sanitizeDb(data) };
   atomicWrite(path.join(BACKUPS_DIR, filename), JSON.stringify(payload, null, 2));
-  rotateBackups();
+  const settings = data && data.backupSettings ? ensureBackupSettings(data) : getBackupSettings();
+  rotateBackups(settings.maxBackups);
+  mirrorBackupFile(filename);
   console.log(`[AUTO-BACKUP] Đã tạo bản sao lưu: ${filename}`);
   return filename;
 }
-setInterval(() => {
+let backupTimer = null;
+function runAutoBackup() {
   try {
     const db = readDatabase();
-    if (db) createDiskBackup(db, 'Tự động sao lưu theo giờ');
+    if (db) createDiskBackup(db, 'Tự động sao lưu định kỳ');
   } catch (e) { console.error('[AUTO-BACKUP]', e.message); }
-}, 3600000);
+}
+// Rescheduling clears the old timer first, so changing settings in
+// Settings can never stack multiple timers on top of each other.
+function scheduleBackupTimer() {
+  if (backupTimer) { clearInterval(backupTimer); backupTimer = null; }
+  const settings = getBackupSettings();
+  if (!settings.enabled || !settings.intervalMinutes) return;
+  backupTimer = setInterval(runAutoBackup, settings.intervalMinutes * 60 * 1000);
+}
+scheduleBackupTimer();
 
 // --- WebSocket ---
 const activeClientsMap = new Map();
@@ -702,6 +753,31 @@ app.post('/api/scan', (req, res) => {
   else res.status(400).json({ error: 'Missing barcode' });
 });
 
+app.get('/api/backup-settings', requireManager, (req, res) => {
+  try {
+    const settings = getBackupSettings();
+    let lastBackupAt = '';
+    try {
+      const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith('.json'))
+        .map((f) => fs.statSync(path.join(BACKUPS_DIR, f)).mtimeMs);
+      if (files.length) lastBackupAt = new Date(Math.max(...files)).toISOString();
+    } catch { /* no backups yet */ }
+    res.json({ success: true, settings, lastBackupAt, mirrorWarning: lastMirrorWarning, lastMirrorAt });
+  } catch (e) { res.status(500).json({ error: String(e.message) }); }
+});
+app.post('/api/backup-settings', requireManager, async (req, res) => {
+  const { settings, errors } = validateBackupSettings(req.body || {}, BACKUPS_DIR);
+  if (!settings) return res.status(400).json({ error: errors.join('; ') });
+  try {
+    await runExclusive(async () => {
+      const db = readDatabase();
+      db.backupSettings = settings;
+      writeDatabase(db);
+    });
+    scheduleBackupTimer();
+    res.json({ success: true, settings });
+  } catch (e) { if (!res.headersSent) res.status(500).json({ error: String(e.message) }); }
+});
 app.get('/api/backups', requireManager, (req, res) => {
   try {
     const files = fs.readdirSync(BACKUPS_DIR).filter((f) => f.endsWith('.json'));

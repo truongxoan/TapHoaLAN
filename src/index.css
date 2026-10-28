@@ -120,6 +120,192 @@
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
 }
 
+/* Explicit light theme: same as the :root defaults, so an old or
+   explicit 'light' value always renders the light set. */
+[data-theme="light"] {
+  --bg-primary: #F1F5F9;
+  --bg-secondary: #E2E8F0;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8FAFC;
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --bg-glass-strong: rgba(255, 255, 255, 0.98);
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --primary: #4338CA;
+  --primary-hover: #3730A3;
+  --primary-light: #EEF2FF;
+  --primary-border: #C7D2FE;
+  --border-color: #CBD5E1;
+  --border-subtle: #E2E8F0;
+  --border-focus: #6366F1;
+  --success: #059669;
+  --success-light: #D1FAE5;
+  --success-border: #6EE7B7;
+  --warning: #D97706;
+  --warning-light: #FEF3C7;
+  --warning-border: #FCD34D;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --danger-border: #FCA5A5;
+  --info: #2563EB;
+  --info-light: #DBEAFE;
+}
+
+/* Fresh shop green — light, calm, easy on the eyes all day. */
+[data-theme="green"] {
+  --bg-primary: #F0FDF4;
+  --bg-secondary: #DCFCE7;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F0FDF4;
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --bg-glass-strong: rgba(255, 255, 255, 0.98);
+  --text-primary: #14532D;
+  --text-secondary: #166534;
+  --text-muted: #4D7C5F;
+  --primary: #15803D;
+  --primary-hover: #166534;
+  --primary-light: #DCFCE7;
+  --primary-border: #86EFAC;
+  --primary-glow: rgba(21, 128, 61, 0.2);
+  --secondary: #0D9488;
+  --secondary-light: #CCFBF1;
+  --success: #15803D;
+  --success-light: #DCFCE7;
+  --success-border: #86EFAC;
+  --warning: #B45309;
+  --warning-light: #FEF3C7;
+  --warning-border: #FCD34D;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --danger-border: #FCA5A5;
+  --info: #0284C7;
+  --info-light: #E0F2FE;
+  --border-color: #BBF7D0;
+  --border-subtle: #DCFCE7;
+  --border-focus: #16A34A;
+}
+
+/* Professional blue — light, high readability for prices and totals. */
+[data-theme="blue"] {
+  --bg-primary: #EFF6FF;
+  --bg-secondary: #DBEAFE;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #EFF6FF;
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --bg-glass-strong: rgba(255, 255, 255, 0.98);
+  --text-primary: #172554;
+  --text-secondary: #1E3A8A;
+  --text-muted: #64748B;
+  --primary: #1D4ED8;
+  --primary-hover: #1E40AF;
+  --primary-light: #DBEAFE;
+  --primary-border: #93C5FD;
+  --primary-glow: rgba(29, 78, 216, 0.2);
+  --secondary: #0891B2;
+  --secondary-light: #ECFEFF;
+  --success: #047857;
+  --success-light: #D1FAE5;
+  --success-border: #6EE7B7;
+  --warning: #B45309;
+  --warning-light: #FEF3C7;
+  --warning-border: #FCD34D;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --danger-border: #FCA5A5;
+  --info: #2563EB;
+  --info-light: #DBEAFE;
+  --border-color: #BFDBFE;
+  --border-subtle: #DBEAFE;
+  --border-focus: #3B82F6;
+}
+
+/* Soft purple/pink — light, friendly, for young shops and gift shops. */
+[data-theme="purple"] {
+  --bg-primary: #FDF4FF;
+  --bg-secondary: #F5D0FE;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FDF4FF;
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --bg-glass-strong: rgba(255, 255, 255, 0.98);
+  --text-primary: #3B0764;
+  --text-secondary: #6B21A8;
+  --text-muted: #A162A8;
+  --primary: #9333EA;
+  --primary-hover: #7E22CE;
+  --primary-light: #F3E8FF;
+  --primary-border: #D8B4FE;
+  --primary-glow: rgba(147, 51, 234, 0.2);
+  --secondary: #DB2777;
+  --secondary-light: #FCE7F3;
+  --success: #047857;
+  --success-light: #D1FAE5;
+  --success-border: #6EE7B7;
+  --warning: #B45309;
+  --warning-light: #FEF3C7;
+  --warning-border: #FCD34D;
+  --danger: #DC2626;
+  --danger-light: #FEE2E2;
+  --danger-border: #FCA5A5;
+  --info: #7C3AED;
+  --info-light: #EDE9FE;
+  --border-color: #E9D5FF;
+  --border-subtle: #F5D0FE;
+  --border-focus: #A855F7;
+}
+
+/* High contrast — black on white, thick borders and focus outlines.
+   Colours only: sizing is untouched, so elder-mode 60px buttons and
+   56px inputs still win (see the elder size guard at the end). */
+[data-theme="contrast"] {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F2F2F2;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F2F2F2;
+  --bg-glass: rgba(255, 255, 255, 0.97);
+  --bg-glass-strong: #FFFFFF;
+  --text-primary: #000000;
+  --text-secondary: #1A1A1A;
+  --text-muted: #333333;
+  --text-inverse: #FFFFFF;
+  --primary: #0044CC;
+  --primary-hover: #003399;
+  --primary-light: #E6EEFF;
+  --primary-border: #000000;
+  --primary-glow: rgba(0, 0, 0, 0.25);
+  --secondary: #006666;
+  --secondary-light: #E6F2F2;
+  --success: #006400;
+  --success-hover: #004d00;
+  --success-light: #E6F4EA;
+  --success-border: #000000;
+  --warning: #7A4A00;
+  --warning-light: #FFF4CC;
+  --warning-border: #000000;
+  --danger: #B00000;
+  --danger-hover: #8B0000;
+  --danger-light: #FFE6E6;
+  --danger-border: #000000;
+  --info: #0044CC;
+  --info-light: #E6EEFF;
+  --border-color: #000000;
+  --border-subtle: #666666;
+  --border-focus: #000000;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 16px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 20px 26px rgba(0, 0, 0, 0.4);
+}
+[data-theme="contrast"] .btn,
+[data-theme="contrast"] .form-control,
+[data-theme="contrast"] .card {
+  border-width: 2px;
+}
+[data-theme="contrast"] :focus-visible {
+  outline: 4px solid #000000;
+  outline-offset: 3px;
+}
+
 /* Base Reset */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -1165,3 +1351,73 @@ h2 { font-size: clamp(1.2rem, 3.2vw, 1.6rem); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ==========================================================================
+   UI POLISH — subtle, shop-appropriate. No screen redesign, no density
+   change. Theme variables above drive all colours; this only improves
+   depth, hover/press feedback, and focus visibility.
+   ========================================================================== */
+.card {
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+}
+.card-header {
+  border-bottom: 1px solid var(--border-subtle);
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: var(--shadow-sm);
+}
+.btn:focus-visible,
+.form-control:focus-visible,
+.nav-tab-btn:focus-visible {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.header-nav {
+  box-shadow: var(--shadow-sm);
+}
+@media (hover: hover) {
+  .elder-product-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+}
+.theme-swatch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.theme-swatch.active {
+  border: 2px solid var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+.theme-swatch-dot {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+.theme-preview {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: var(--bg-card);
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-swatch, .card { transition: none !important; }
+}
+/* Elder sizing guard — must stay last so polish never shrinks it. */
+.mode-elder .btn { min-height: 60px; }
+.mode-elder .btn-sm { min-height: 52px; }
+.mode-elder input, .mode-elder select { min-height: 56px; }

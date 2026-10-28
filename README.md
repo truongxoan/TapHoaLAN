@@ -152,3 +152,20 @@ chỉ lấy các file chạy phần mềm (bỏ qua thư mục Android), rồi c
 `npm run build` và khởi động server tại `http://localhost:5000`.
 Lưu ý: đây là bản chạy thử nhanh, dữ liệu lưu trong thư mục tạm, không phải
 dữ liệu tiệm thật. Muốn dùng dữ liệu tiệm thật, dùng `CAP_NHAT_TU_GITHUB.bat`.
+
+## Hướng dẫn đầy đủ + Theme + Sao lưu
+
+Xem [HUONG_DAN.md](HUONG_DAN.md) để tải, chạy thử bằng CMD, chạy nhanh
+từ xa, cập nhật từ GitHub, đổi PIN lần đầu, chọn theme và cài đặt sao lưu.
+
+**Theme (chọn trong Cài đặt, hoặc bấm nút theme trên thanh trên cùng):**
+Tối, Sáng, Xanh lá Tiệm, Xanh dương, Tím Hồng, Tương phản cao.
+Theme chỉ đổi trên trình duyệt đang dùng, không đồng bộ qua mạng LAN.
+
+**Sao lưu máy chủ (Cài đặt > Sao Lưu & Dự Phòng, cần PIN chủ tiệm):**
+chu kỳ 15 phút / 30 phút / 1 giờ / 3 giờ / 6 giờ / 12 giờ / 24 giờ
+hoặc tắt; giữ lại 12 / 24 / 48 / 96 bản; thư mục dự phòng (mirror)
+tùy chọn để chép thêm mỗi bản sao lưu sang ổ khác hoặc USB.
+Khuyến nghị: tiệm đông 30–60 phút, tiệm bình thường 1–3 giờ,
+tiệm nhỏ 6–12 giờ, luôn sao lưu ngay trước khi chốt ca và chép một
+bản ra khỏi máy mỗi ngày.
